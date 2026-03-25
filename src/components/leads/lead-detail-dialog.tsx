@@ -35,6 +35,96 @@ type Lead = {
   chatCount?: number;
 };
 
+type ScoreBreakdownItem = {
+  label: string;
+  value: number;
+  max: number;
+  hint: string;
+};
+
+const scoreBreakdownConfig = [
+  {
+    label: "Project Size",
+    max: 25,
+    hint: "Building scope and fit for your target segment",
+  },
+  {
+    label: "Budget Signals",
+    max: 25,
+    hint: "Budget confidence based on conversations",
+  },
+  {
+    label: "Timeline",
+    max: 20,
+    hint: "Urgency and readiness to move forward",
+  },
+  {
+    label: "Decision Maker",
+    max: 15,
+    hint: "Access to final buyer or key stakeholder",
+  },
+  {
+    label: "Project Clarity",
+    max: 15,
+    hint: "How specific the project details are",
+  },
+] as const;
+
+const hashString = (value: string) => {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  return hash;
+};
+
+const createSeededRandom = (seed: number) => {
+  let s = seed >>> 0;
+  return () => {
+    s = (s * 1664525 + 1013904223) >>> 0;
+    return s / 4294967296;
+  };
+};
+
+const createMockScoreData = (seedInput: string) => {
+  const rand = createSeededRandom(hashString(seedInput));
+  const score = Math.round(15 + rand() * 80);
+
+  const rawValues = scoreBreakdownConfig.map((item) => rand() * item.max);
+  const totalRaw = rawValues.reduce((sum, n) => sum + n, 0) || 1;
+  const values = rawValues.map((n) => Math.round((n / totalRaw) * score));
+
+  let diff = score - values.reduce((sum, n) => sum + n, 0);
+  while (diff !== 0) {
+    let adjusted = false;
+    for (let i = 0; i < values.length; i++) {
+      const max = scoreBreakdownConfig[i].max;
+      if (diff > 0 && values[i] < max) {
+        values[i] += 1;
+        diff -= 1;
+        adjusted = true;
+      } else if (diff < 0 && values[i] > 0) {
+        values[i] -= 1;
+        diff += 1;
+        adjusted = true;
+      }
+      if (diff === 0) break;
+    }
+    if (!adjusted) break;
+  }
+
+  const breakdown: ScoreBreakdownItem[] = scoreBreakdownConfig.map(
+    (item, index) => ({
+      label: item.label,
+      value: values[index],
+      max: item.max,
+      hint: item.hint,
+    }),
+  );
+
+  return { score, breakdown };
+};
+
 type Props = {
   lead: Lead;
   trigger?: React.ReactNode;
@@ -74,6 +164,35 @@ export default function LeadDetailDialog({
     "Payment Done",
     "Delivered",
   ];
+
+  const mockScoreData = React.useMemo(
+    () => createMockScoreData(lead.id),
+    [lead.id],
+  );
+  const normalizedScore = mockScoreData.score;
+
+  const getScoreFillColorClass = (score: number) => {
+    if (score < 30) return "bg-blue-500";
+    if (score < 50) return "bg-green-500";
+    if (score < 80) return "bg-amber-500";
+    return "bg-red-500";
+  };
+
+  const getScoreTextColorClass = (score: number) => {
+    if (score < 30) return "text-blue-700";
+    if (score < 50) return "text-green-700";
+    if (score < 80) return "text-amber-700";
+    return "text-red-700";
+  };
+
+  const getScoreTag = (score: number) => {
+    if (score < 30) return "COLD";
+    if (score < 50) return "GOOD";
+    if (score < 80) return "WARM";
+    return "HOT";
+  };
+
+  const scoreBreakdown = mockScoreData.breakdown;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -230,6 +349,74 @@ export default function LeadDetailDialog({
             </div>
           </div>
 
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="p-4 rounded-lg border bg-white">
+              <div className="text-xs tracking-wider text-gray-500 font-semibold">
+                LEAD SCORING
+              </div>
+              <div className="mt-3 flex items-end gap-2">
+                <span
+                  className={`text-4xl font-bold leading-none ${getScoreTextColorClass(
+                    normalizedScore,
+                  )}`}
+                >
+                  {normalizedScore}
+                </span>
+                <span className="text-gray-400 text-lg">/100</span>
+              </div>
+              <div className="mt-3">
+                <Badge
+                  variant="secondary"
+                  className={`${getScoreFillColorClass(normalizedScore)} text-white`}
+                >
+                  {getScoreTag(normalizedScore)}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="lg:col-span-2 p-4 rounded-lg border bg-white">
+              <div className="text-xs tracking-wider text-gray-500 font-semibold mb-3">
+                SCORE BREAKDOWN
+              </div>
+
+              <div className="space-y-3">
+                {scoreBreakdown.map((item) => {
+                  const itemPercent = Math.max(
+                    0,
+                    Math.min(100, (item.value / item.max) * 100),
+                  );
+                  return (
+                    <div key={item.label}>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="font-medium text-gray-800">
+                          {item.label}
+                        </span>
+                        <span
+                          className={`font-semibold ${getScoreTextColorClass(
+                            itemPercent,
+                          )}`}
+                        >
+                          {item.value}/{item.max}
+                        </span>
+                      </div>
+                      <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${getScoreFillColorClass(
+                            itemPercent,
+                          )}`}
+                          style={{ width: `${itemPercent}%` }}
+                        />
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {item.hint}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="p-4 rounded-lg bg-gray-50">
             <h4 className="text-sm font-medium text-gray-900 mb-3">
               Progress Steps
@@ -247,8 +434,8 @@ export default function LeadDetailDialog({
                           completed
                             ? "bg-green-600 text-white"
                             : isCurrent
-                            ? "bg-blue-100 text-blue-700"
-                            : "bg-gray-200 text-gray-600"
+                              ? "bg-blue-100 text-blue-700"
+                              : "bg-gray-200 text-gray-600"
                         }`}
                       >
                         {completed ? (
@@ -263,8 +450,8 @@ export default function LeadDetailDialog({
                             completed
                               ? "text-green-800"
                               : isCurrent
-                              ? "text-blue-700 font-semibold"
-                              : "text-gray-700"
+                                ? "text-blue-700 font-semibold"
+                                : "text-gray-700"
                           }`}
                         >
                           {step}
@@ -315,7 +502,7 @@ export default function LeadDetailDialog({
               {[1, 2, 3, 4, 5].map((index) => (
                 <div
                   key={index}
-                  className="rounded-lg overflow-hidden h-32 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center"
+                  className="rounded-lg overflow-hidden h-32 bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center"
                 >
                   <div className="text-gray-500 text-sm">Photo {index}</div>
                 </div>
