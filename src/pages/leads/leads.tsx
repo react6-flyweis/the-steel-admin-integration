@@ -367,7 +367,7 @@ export default function LeadsPage() {
         {/* Table */}
         <Card className="p-0">
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto ">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
@@ -422,13 +422,13 @@ export default function LeadsPage() {
                       </td>
                       <td className="px-3 py-2 sm:px-6 sm:py-4">
                         <div className="flex flex-col">
-                          <span className="font-medium text-gray-900">
+                          <span className="font-medium text-gray-900 text-nowrap whitespace-nowrap">
                             {lead.name}
                           </span>
-                          <span className="text-sm text-gray-500">
+                          <span className="text-sm text-gray-500 text-nowrap">
                             {lead.id}
                           </span>
-                          <span className="text-sm text-gray-500">
+                          <span className="text-sm text-gray-500 text-nowrap">
                             {lead.workshop} · {lead.category}
                           </span>
                         </div>
@@ -446,7 +446,7 @@ export default function LeadsPage() {
                                 </AvatarFallback>
                               </Avatar>
                               <div className="flex flex-col">
-                                <span className="text-sm font-medium text-gray-900">
+                                <span className="text-sm font-medium text-gray-900 text-nowrap whitespace-nowrap">
                                   {lead.assignedToName}
                                 </span>
                                 <span className="text-xs text-gray-500">
