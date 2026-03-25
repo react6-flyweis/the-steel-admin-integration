@@ -6,7 +6,7 @@ interface ChatHeaderProps {
   icon?: string;
   iconBgColor?: string;
   avatar?: string;
-  onVideoCall?: () => void;
+  onCall?: () => void;
   onInfo?: () => void;
   type: "department" | "contact";
 }
@@ -17,7 +17,7 @@ export default function ChatHeader({
   icon,
   iconBgColor = "bg-blue-500",
   avatar,
-  onVideoCall,
+  onCall,
   onInfo,
   type,
 }: ChatHeaderProps) {
@@ -45,9 +45,9 @@ export default function ChatHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
-        {onVideoCall && (
+        {onCall && (
           <button
-            onClick={onVideoCall}
+            onClick={onCall}
             className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
             title="Call"
           >

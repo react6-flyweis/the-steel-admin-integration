@@ -16,6 +16,7 @@ const aiAssistant = {
   subtitle: "Smart AI-powered chat",
   icon: "AI",
   iconBgColor: "bg-indigo-500",
+  phone: "+1234567890", // set your default dial number
 };
 
 export default function AIChatPage() {
@@ -61,6 +62,14 @@ export default function AIChatPage() {
     }, 700);
   };
 
+  const handleCallClick = () => {
+    const phone = aiAssistant.phone?.trim();
+    if (!phone) return;
+
+    const telUrl = `tel:${encodeURIComponent(phone)}`;
+    window.location.href = telUrl;
+  };
+
   const augmentedMessages = isTyping
     ? [
         ...messages,
@@ -95,6 +104,7 @@ export default function AIChatPage() {
           messageInput={messageInput}
           onMessageInputChange={setMessageInput}
           onSendMessage={handleSendMessage}
+          onCallClick={handleCallClick}
         />
       </div>
     </div>

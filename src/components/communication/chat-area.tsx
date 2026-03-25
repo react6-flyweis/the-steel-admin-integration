@@ -19,12 +19,14 @@ interface ChatAreaProps {
     icon?: string;
     iconBgColor?: string;
     subtitle?: string;
+    phone?: string;
   };
   messages: Message[];
   messageInput: string;
   onMessageInputChange: (value: string) => void;
   onSendMessage: () => void;
   onBackClick?: () => void;
+  onCallClick?: () => void;
   onInfoClick?: () => void;
 }
 
@@ -36,6 +38,7 @@ export default function ChatArea({
   onSendMessage,
   onBackClick,
   onInfoClick,
+  onCallClick,
 }: ChatAreaProps) {
   if (!selectedChat) {
     return (
@@ -65,7 +68,7 @@ export default function ChatArea({
             iconBgColor={selectedChat.iconBgColor}
             avatar={selectedChat.avatar}
             type={selectedChat.type}
-            onVideoCall={() => console.log("Video call")}
+            onCall={onCallClick}
             onInfo={onInfoClick}
           />
         </div>
