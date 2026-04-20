@@ -1,7 +1,11 @@
 import { Link, Outlet, useNavigate, useParams } from "react-router";
-import { ArrowLeft, MailIcon } from "lucide-react";
-import PaymentSuccessIcon from "@/assets/icons/customers/payment-success.svg";
-import MoneyReceiveIcon from "@/assets/icons/customers/money-receive-square.svg";
+import {
+  ArrowLeft,
+  Clock3,
+  DollarSign,
+  FileText,
+  MailIcon,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,12 +43,22 @@ export default function CustomerDetailLayout() {
           </Button>
           <h1 className="text-lg ">Customer Info</h1>
         </div>
-        <Link to="/customers/meetings/schedule">
-          <Button className="bg-green-600 hover:bg-green-700 w-full sm:w-auto mt-3 sm:mt-0">
-            <MailIcon className="h-4 w-4 mr-2" />
-            Schedule Meeting
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <Button asChild className="w-full sm:w-auto bg-black px-4">
+            <Link to={`/customers/${id}/edit`}>Edit</Link>
           </Button>
-        </Link>
+          <Link to={`/customers/${id}/projects/new`}>
+            <Button className="w-full sm:w-auto bg-[#1F86D5] hover:bg-[#1769A7]">
+              Create new Project
+            </Button>
+          </Link>
+          <Link to="/customers/meetings/schedule">
+            <Button className="bg-green-600 hover:bg-green-700 w-full sm:w-auto">
+              <MailIcon className="h-4 w-4 mr-2" />
+              Schedule Meeting
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Profile Card */}
