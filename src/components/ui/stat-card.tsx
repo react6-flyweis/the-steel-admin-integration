@@ -9,6 +9,9 @@ type StatCardProps = {
   icon?: React.ReactNode;
   color?: string;
   className?: string;
+  titleClassName?: string;
+  valueClassName?: string;
+  iconWrapperClassName?: string;
   navigateTo?: string;
 };
 
@@ -18,6 +21,9 @@ export default function StatCard({
   icon,
   color,
   className,
+  titleClassName,
+  valueClassName,
+  iconWrapperClassName,
   navigateTo,
 }: StatCardProps) {
   const navigation = useNavigate();
@@ -26,19 +32,30 @@ export default function StatCard({
       className={cn(
         "sm:p-5 px-3 py-2 rounded-md text-white border-none cursor-pointer",
         className,
-        color
+        color,
       )}
       onClick={() => navigateTo && navigation(navigateTo)}
     >
       <div className="flex items-center justify-between">
         <div>
-          <p className="md:text-base text-xs opacity-90">{title}</p>
-          <p className="md:text-2xl text-base mt-1 w-[70px] sm:w-auto overflow-y-hidden overflow-x-auto">
+          <p className={cn("md:text-base text-xs opacity-90", titleClassName)}>
+            {title}
+          </p>
+          <p
+            className={cn(
+              "md:text-2xl text-base mt-1 w-17.5 sm:w-auto overflow-y-hidden overflow-x-auto",
+              valueClassName,
+            )}
+          >
             {value}
           </p>
         </div>
 
-        <div className="bg-white sm:p-2 p-1 rounded-md">{icon}</div>
+        <div
+          className={cn("bg-white sm:p-2 p-1 rounded-md", iconWrapperClassName)}
+        >
+          {icon}
+        </div>
       </div>
     </Card>
   );
