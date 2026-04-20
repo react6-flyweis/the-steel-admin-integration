@@ -1,6 +1,7 @@
-import { useForm, Controller, useFieldArray } from "react-hook-form";
+import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { Calendar, Plus, UserPlus } from "lucide-react";
 import InvoiceLineItem from "./invoice-line-item";
+import AddProjectDialog from "@/components/add-project-dialog";
 import AddMarkupDialog from "@/components/add-markup-dialog";
 import AddDiscountDialog from "@/components/add-discount-dialog";
 import AddDepositDialog from "@/components/add-deposit-dialog";
@@ -39,6 +40,8 @@ export interface InvoiceFormValues {
   depositValue: string;
   paymentScheduleType: "%" | "$";
   paymentSchedulePayments: { name: string; amount: string }[];
+  projectId: string;
+  projectName: string;
   clientId: string;
   clientName: string;
   clientAvatar: string;
@@ -46,7 +49,7 @@ export interface InvoiceFormValues {
 }
 
 export default function InvoiceForm() {
-  const { register, control, handleSubmit, watch, setValue, getValues } =
+  const { register, control, handleSubmit, setValue, getValues } =
     useForm<InvoiceFormValues>({
       defaultValues: {
         invoiceNumber: "2460",
@@ -62,6 +65,8 @@ export default function InvoiceForm() {
         depositValue: "",
         paymentScheduleType: "%",
         paymentSchedulePayments: [],
+        projectId: "",
+        projectName: "",
         clientId: "",
         clientName: "",
         clientAvatar: "",
@@ -83,6 +88,8 @@ export default function InvoiceForm() {
       },
     });
 
+  const watchedValues = useWatch({ control }) as InvoiceFormValues;
+
   const navigate = useNavigate();
 
   const { fields, append, remove } = useFieldArray({
@@ -91,20 +98,21 @@ export default function InvoiceForm() {
     keyName: "fieldId",
   });
 
-  const watchLineItems = watch("lineItems");
-  const invoiceNumber = watch("invoiceNumber");
-  const markupType = watch("markupType");
-  const markupValue = watch("markupValue");
-  const discountType = watch("discountType");
-  const discountValue = watch("discountValue");
-  const depositType = watch("depositType");
-  const depositValue = watch("depositValue");
-  const paymentScheduleType = watch("paymentScheduleType");
-  const paymentSchedulePayments = watch("paymentSchedulePayments");
-  const clientId = watch("clientId");
-  const clientName = watch("clientName");
-  const clientAvatar = watch("clientAvatar");
-  const taxes = watch("taxes");
+  const watchLineItems = watchedValues?.lineItems ?? [];
+  const invoiceNumber = watchedValues?.invoiceNumber ?? "";
+  const markupType = watchedValues?.markupType ?? "%";
+  const markupValue = watchedValues?.markupValue ?? "";
+  const discountType = watchedValues?.discountType ?? "%";
+  const discountValue = watchedValues?.discountValue ?? "";
+  const depositType = watchedValues?.depositType ?? "%";
+  const depositValue = watchedValues?.depositValue ?? "";
+  const paymentScheduleType = watchedValues?.paymentScheduleType ?? "%";
+  const paymentSchedulePayments = watchedValues?.paymentSchedulePayments ?? [];
+  const projectId = watchedValues?.projectId ?? "";
+  const clientId = watchedValues?.clientId ?? "";
+  const clientName = watchedValues?.clientName ?? "";
+  const clientAvatar = watchedValues?.clientAvatar ?? "";
+  const taxes = watchedValues?.taxes ?? [];
 
   // const [notesOpen, setNotesOpen] = useState<Record<string, boolean>>({});
 
@@ -139,7 +147,7 @@ export default function InvoiceForm() {
     return items.reduce(
       (sum, item) =>
         sum + (parseFloat(String(item.rate || 0)) || 0) * (item.quantity || 0),
-      0
+      0,
     );
   };
 
@@ -184,6 +192,8 @@ export default function InvoiceForm() {
         subtotal: calculateSubtotal(),
         taxAmount: calculateTax(),
         total: calculateTotal(),
+        projectId: values.projectId,
+        projectName: values.projectName,
       },
     });
   };
@@ -222,7 +232,7 @@ export default function InvoiceForm() {
               </div>
             </div>
 
-            <div className="text-sm text-gray-500 leading-relaxed max-w-[250px]">
+            <div className="text-sm text-gray-500 leading-relaxed max-w-62.5">
               1851 Madison Ave Suite 300
               <br />
               Council Bluffs, IA
@@ -239,7 +249,29 @@ export default function InvoiceForm() {
 
           {/* Right: Invoice Meta & Client Add */}
           <div className="flex-1 max-w-2xl flex flex-col gap-6">
-            <div className="flex justify-end">
+            <div className="flex flex-wrap justify-end gap-3">
+              <AddProjectDialog
+                initialSelected={projectId || null}
+                onDone={(project) => {
+                  if (!project) {
+                    setValue("projectId", "");
+                    setValue("projectName", "");
+                    return;
+                  }
+
+                  setValue("projectId", project.id);
+                  setValue("projectName", project.name);
+                }}
+              >
+                <Button
+                  variant="outline"
+                  className="border-blue-200 text-blue-600 hover:bg-blue-50 w-fit sm:w-auto h-12 px-8 flex items-center gap-2 rounded-md"
+                >
+                  <Plus className="w-4 h-4" />
+                  ADD PROJECT
+                </Button>
+              </AddProjectDialog>
+
               <AddClientDialog
                 initialSelected={clientId || null}
                 onDone={(client) => {
@@ -565,7 +597,7 @@ export default function InvoiceForm() {
                           name: string;
                           amount: string;
                         },
-                        i: number
+                        i: number,
                       ) => (
                         <div
                           key={i}
@@ -573,7 +605,7 @@ export default function InvoiceForm() {
                         >
                           {p.name} {p.amount}
                         </div>
-                      )
+                      ),
                     )}
 
                     <PaymentScheduleDialog
