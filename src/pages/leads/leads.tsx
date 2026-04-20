@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Eye,
   Edit,
+  FileText,
   Users,
   UserCheck,
   UserX,
@@ -546,6 +547,15 @@ export default function LeadsPage() {
                               </Button>
                             }
                           />
+                          <Link to={`/leads/${lead.id}/edit`}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="p-2 h-8 w-8"
+                            >
+                              <Edit className="h-4 w-4 text-gray-600" />
+                            </Button>
+                          </Link>
                           <CreateQuotationDialog
                             leadData={{ name: lead.name, id: lead.id }}
                             trigger={
@@ -554,7 +564,7 @@ export default function LeadsPage() {
                                 size="sm"
                                 className="p-2 h-8 w-8"
                               >
-                                <Edit className="h-4 w-4 text-gray-600" />
+                                <FileText className="h-4 w-4 text-gray-600" />
                               </Button>
                             }
                           />
