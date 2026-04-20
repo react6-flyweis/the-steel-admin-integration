@@ -36,7 +36,7 @@ type LeadFormData = {
   insulation: number;
 };
 
-const getInitialFormData = (leadId?: string): LeadFormData => ({
+const getInitialFormData = (): LeadFormData => ({
   firstName: "",
   lastName: "",
   email: "",
@@ -108,9 +108,7 @@ export default function EditLeadPage() {
   const navigate = useNavigate();
   const { leadId } = useParams();
   const [showSuccess, setShowSuccess] = useState(false);
-  const [formData, setFormData] = useState<LeadFormData>(
-    getInitialFormData(leadId),
-  );
+  const [formData, setFormData] = useState<LeadFormData>(getInitialFormData());
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,

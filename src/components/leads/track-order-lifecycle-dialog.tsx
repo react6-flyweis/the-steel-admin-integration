@@ -75,8 +75,8 @@ export default function TrackOrderLifecycleDialog({
                         completed
                           ? "bg-green-600 text-white"
                           : isCurrent
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-200 text-gray-600"
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-200 text-gray-600"
                       }`}
                     >
                       {completed ? (
@@ -92,8 +92,8 @@ export default function TrackOrderLifecycleDialog({
                           completed
                             ? "text-green-700"
                             : isCurrent
-                            ? "text-blue-700 font-semibold"
-                            : "text-gray-700"
+                              ? "text-blue-700 font-semibold"
+                              : "text-gray-700"
                         }`}
                       >
                         {s}
@@ -108,8 +108,8 @@ export default function TrackOrderLifecycleDialog({
 
                   {completed ? (
                     <div className="flex items-center gap-0.5">
-                      <Check className="h-5 w-5 text-green-600 stroke-[3]" />
-                      <Check className="h-5 w-5 text-green-600 stroke-[3]" />
+                      <Check className="h-5 w-5 text-green-600 stroke-3" />
+                      <Check className="h-5 w-5 text-green-600 stroke-3" />
                     </div>
                   ) : null}
                 </div>
