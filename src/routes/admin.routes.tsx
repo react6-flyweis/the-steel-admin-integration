@@ -39,6 +39,12 @@ const CustomerStatus = lazy(
 const CustomerOrder = lazy(
   () => import("@/pages/customers/customer-detail/customer-order"),
 );
+const AddNewProjectPage = lazy(
+  () => import("@/pages/customers/customer-detail/add-new-project"),
+);
+const EditCustomerDetailsPage = lazy(
+  () => import("@/pages/customers/edit-customer-details"),
+);
 const Contracts = lazy(() => import("@/pages/customers/contracts"));
 const ContractDetail = lazy(() => import("@/pages/customers/contract-detail"));
 const Meetings = lazy(() => import("@/pages/customers/meetings"));
@@ -49,6 +55,7 @@ const ScheduleMeeting = lazy(
 // leads section
 const Leads = lazy(() => import("@/pages/leads/leads"));
 const AddNewLead = lazy(() => import("@/pages/leads/add-new-lead"));
+const EditLead = lazy(() => import("@/pages/leads/edit-lead"));
 const FollowUp = lazy(() => import("@/pages/leads/follow-up"));
 const LeadCommunicationTimelinePage = lazy(
   () => import("@/pages/leads/lead-communication-timeline"),
@@ -70,12 +77,17 @@ const SingleLeadNotesPage = lazy(
 const SingleLeadCallsPage = lazy(
   () => import("@/pages/leads/single-lead-calls"),
 );
+const LeadPaymentsPage = lazy(() => import("@/pages/leads/lead-payments"));
 const AiScriptGeneratorPage = lazy(
   () => import("@/pages/leads/ai-script-generator"),
 );
 const LeadScoring = lazy(() => import("@/pages/leads/lead-scoring"));
 const FollowUpKpis = lazy(() => import("@/pages/leads/follow-up-kpis"));
 const AIMarketing = lazy(() => import("@/pages/leads/ai-marketing"));
+const EscalatedLeads = lazy(() => import("@/pages/leads/escalated-leads"));
+const AllPurchaseOrders = lazy(
+  () => import("@/pages/leads/all-purchase-orders"),
+);
 
 // employees section
 const Employees = lazy(() => import("@/pages/employees/employees"));
@@ -222,7 +234,9 @@ export const adminRoutes: RouteObject[] = [
         children: [
           { index: true, element: <Leads /> },
           { path: "add", element: <AddNewLead /> },
+          { path: "escalated", element: <EscalatedLeads /> },
           { path: "ai-marketing", element: <AIMarketing /> },
+          { path: "purchase-orders", element: <AllPurchaseOrders /> },
 
           // /leads/follow-up routes
           {
@@ -262,6 +276,7 @@ export const adminRoutes: RouteObject[] = [
           {
             path: ":leadId",
             children: [
+              { path: "edit", element: <EditLead /> },
               { path: "timeline", element: <SingleLeadTimelinePage /> },
               {
                 path: "emails",
@@ -278,6 +293,10 @@ export const adminRoutes: RouteObject[] = [
               {
                 path: "calls",
                 element: <SingleLeadCallsPage />,
+              },
+              {
+                path: "payments",
+                element: <LeadPaymentsPage />,
               },
             ],
           },
@@ -322,6 +341,8 @@ export const adminRoutes: RouteObject[] = [
               { path: "order", element: <CustomerOrder /> },
             ],
           },
+          { path: ":id/edit", element: <EditCustomerDetailsPage /> },
+          { path: ":id/projects/new", element: <AddNewProjectPage /> },
         ],
       },
 
