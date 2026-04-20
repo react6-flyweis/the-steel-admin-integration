@@ -122,68 +122,28 @@ export default function CustomerDetailLayout() {
       {/* Stats Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Payment Received"
+          title="Total Paid"
           value="$1,850"
           color="bg-[#1D51A4]"
-          icon={
-            <img
-              src={PaymentSuccessIcon}
-              alt=""
-              className="h-5 w-5"
-              style={{
-                filter:
-                  "brightness(0) saturate(100%) invert(26%) sepia(62%) saturate(1586%) hue-rotate(199deg) brightness(93%) contrast(91%)",
-              }}
-            />
-          }
+          icon={<DollarSign className="h-5 w-5 text-[#1D51A4]" />}
         />
         <StatCard
           title="Pending Payment"
           value="$2,125"
           color="bg-[#FD8D5B]"
-          icon={
-            <img
-              src={MoneyReceiveIcon}
-              alt=""
-              className="h-5 w-5"
-              style={{
-                filter:
-                  "brightness(0) saturate(100%) invert(63%) sepia(34%) saturate(1825%) hue-rotate(334deg) brightness(102%) contrast(98%)",
-              }}
-            />
-          }
+          icon={<Clock3 className="h-5 w-5 text-[#FD8D5B]" />}
         />
         <StatCard
-          title="Profit"
-          value="$5,000"
+          title="Total Invoices"
+          value="4"
           color="bg-[#EAB308]"
-          icon={
-            <img
-              src={MoneyReceiveIcon}
-              alt=""
-              className="h-5 w-5"
-              style={{
-                filter:
-                  "brightness(0) saturate(100%) invert(71%) sepia(99%) saturate(394%) hue-rotate(1deg) brightness(97%) contrast(92%)",
-              }}
-            />
-          }
+          icon={<FileText className="h-5 w-5 text-[#EAB308]" />}
         />
         <StatCard
           title="Revenue Generated"
           value="$4,125"
           color="bg-[#A855F7]"
-          icon={
-            <img
-              src={MoneyReceiveIcon}
-              alt=""
-              className="h-5 w-5"
-              style={{
-                filter:
-                  "brightness(0) saturate(100%) invert(53%) sepia(95%) saturate(3803%) hue-rotate(250deg) brightness(100%) contrast(95%)",
-              }}
-            />
-          }
+          icon={<DollarSign className="h-5 w-5 text-[#A855F7]" />}
         />
       </div>
 
