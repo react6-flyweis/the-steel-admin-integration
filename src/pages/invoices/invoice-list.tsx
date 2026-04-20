@@ -33,6 +33,7 @@ type Invoice = {
   id: string;
   invoiceNumber: string;
   customer: string;
+  project: string;
   dueDate: string; // ISO
   amount: number;
   paid: number;
@@ -44,6 +45,7 @@ const initialInvoices: Invoice[] = [
     id: "1",
     invoiceNumber: "INV001",
     customer: "Carl Evans",
+    project: "ABC Site A",
     dueDate: "2024-12-24",
     amount: 500,
     paid: 500,
@@ -53,6 +55,7 @@ const initialInvoices: Invoice[] = [
     id: "2",
     invoiceNumber: "INV002",
     customer: "Minerva Rameriz",
+    project: "ABC Site A",
     dueDate: "2024-12-10",
     amount: 1500,
     paid: 1500,
@@ -62,6 +65,7 @@ const initialInvoices: Invoice[] = [
     id: "3",
     invoiceNumber: "INV003",
     customer: "Robert Lamon",
+    project: "ABC Site A",
     dueDate: "2024-11-27",
     amount: 600,
     paid: 600,
@@ -71,6 +75,7 @@ const initialInvoices: Invoice[] = [
     id: "4",
     invoiceNumber: "INV004",
     customer: "Patricia Lewis",
+    project: "ABC Site A",
     dueDate: "2024-11-18",
     amount: 1000,
     paid: 1000,
@@ -80,6 +85,7 @@ const initialInvoices: Invoice[] = [
     id: "5",
     invoiceNumber: "INV005",
     customer: "Mark Joslyn",
+    project: "ABC Site A",
     dueDate: "2024-11-06",
     amount: 1200,
     paid: 1200,
@@ -89,6 +95,7 @@ const initialInvoices: Invoice[] = [
     id: "6",
     invoiceNumber: "INV006",
     customer: "Marsha Betts",
+    project: "ABC Site A",
     dueDate: "2024-10-25",
     amount: 800,
     paid: 800,
@@ -98,6 +105,7 @@ const initialInvoices: Invoice[] = [
     id: "7",
     invoiceNumber: "INV007",
     customer: "Daniel Jude",
+    project: "ABC Site A",
     dueDate: "2024-10-14",
     amount: 2000,
     paid: 2000,
@@ -107,6 +115,7 @@ const initialInvoices: Invoice[] = [
     id: "8",
     invoiceNumber: "INV008",
     customer: "Emma Bates",
+    project: "ABC Site A",
     dueDate: "2024-10-03",
     amount: 100,
     paid: 100,
@@ -116,6 +125,7 @@ const initialInvoices: Invoice[] = [
     id: "9",
     invoiceNumber: "INV009",
     customer: "Richard Fralick",
+    project: "ABC Site A",
     dueDate: "2024-09-20",
     amount: 300,
     paid: 300,
@@ -125,6 +135,7 @@ const initialInvoices: Invoice[] = [
     id: "10",
     invoiceNumber: "INV010",
     customer: "Michelle Robison",
+    project: "ABC Site A",
     dueDate: "2024-09-10",
     amount: 5000,
     paid: 0,
@@ -137,7 +148,7 @@ function formatCurrency(n: number) {
 }
 
 export default function InvoiceListPage() {
-  const [invoices] = useState(initialInvoices);
+  const [invoices, setInvoices] = useState(initialInvoices);
   const [query, setQuery] = useState("");
   const [customerFilter, setCustomerFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
@@ -189,6 +200,16 @@ export default function InvoiceListPage() {
   const current = Math.min(currentPage, totalPages);
   const start = (current - 1) * rowsPerPage;
   const paginated = filtered.slice(start, start + rowsPerPage);
+
+  const markAsPaid = (invoiceId: string) => {
+    setInvoices((prev) =>
+      prev.map((invoice) =>
+        invoice.id === invoiceId
+          ? { ...invoice, paid: invoice.amount, status: "Paid" }
+          : invoice,
+      ),
+    );
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -321,12 +342,15 @@ export default function InvoiceListPage() {
           <div className="overflow-x-auto border-t bg-white">
             <Table className="bg-white">
               <TableHeader>
-                <tr className="bg-gray-50">
+                <TableRow className="bg-gray-50 hover:bg-gray-50">
                   <TableHead className="text-left px-6 py-3 text-sm text-gray-600">
                     Invoice Number
                   </TableHead>
                   <TableHead className="text-left px-6 py-3 text-sm text-gray-600">
                     Customer
+                  </TableHead>
+                  <TableHead className="text-left px-6 py-3 text-sm text-gray-600">
+                    Project
                   </TableHead>
                   <TableHead className="text-left px-6 py-3 text-sm text-gray-600">
                     Due Date
@@ -343,7 +367,10 @@ export default function InvoiceListPage() {
                   <TableHead className="text-left px-6 py-3 text-sm text-gray-600">
                     Status
                   </TableHead>
-                </tr>
+                  <TableHead className="text-left px-6 py-3 text-sm text-gray-600">
+                    Action
+                  </TableHead>
+                </TableRow>
               </TableHeader>
               <TableBody>
                 {paginated.map((inv) => (
@@ -352,6 +379,7 @@ export default function InvoiceListPage() {
                       {inv.invoiceNumber}
                     </TableCell>
                     <TableCell>{inv.customer}</TableCell>
+                    <TableCell>{inv.project}</TableCell>
                     <TableCell>
                       {new Date(inv.dueDate).toLocaleDateString()}
                     </TableCell>
@@ -362,16 +390,27 @@ export default function InvoiceListPage() {
                     </TableCell>
                     <TableCell className="px-6 py-4">
                       {inv.status === "Paid" ? (
-                        <span className="inline-flex items-center gap-2 bg-green-400 text-white px-2 py-0.5 rounded-md text-sm font-medium">
-                          <span className="w-2 h-2 bg-white rounded-full" />
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-500 px-2 py-0.5 text-xs font-semibold text-white">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
                           Paid
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-2 bg-red-400 text-white px-2 py-0.5 rounded-md text-sm font-medium">
-                          <span className="w-2 h-2 bg-white rounded-full" />
+                        <span className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                          <span className="h-1.5 w-1.5 rounded-full bg-white" />
                           Unpaid
                         </span>
                       )}
+                    </TableCell>
+                    <TableCell className="px-6 py-4">
+                      {inv.status === "Unpaid" ? (
+                        <Button
+                          type="button"
+                          onClick={() => markAsPaid(inv.id)}
+                          className="h-6 rounded-md bg-indigo-600 px-2.5 text-xs font-medium text-white hover:bg-indigo-700"
+                        >
+                          Mark as paid
+                        </Button>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
