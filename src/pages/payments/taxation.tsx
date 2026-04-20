@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -22,12 +22,19 @@ import TitleSubtitle from "@/components/TitleSubtitle";
 import Pagination from "@/components/Pagination";
 import AddNewTaxModal from "@/components/payments/add-new-tax-dialog";
 
-const taxData = [
+type TaxRow = {
+  state: string;
+  filingFrequency: string;
+  dueDate: string;
+  website: string;
+  status: "Paid" | "Pending";
+};
+
+const initialTaxData: TaxRow[] = [
   {
     state: "Alabama",
     filingFrequency: "Monthly",
     dueDate: "20th",
-    threshold: "> $2,500/mo",
     website: "https://myalabamataxes.alabama.gov",
     status: "Paid",
   },
@@ -35,7 +42,6 @@ const taxData = [
     state: "Alaska",
     filingFrequency: "Local only",
     dueDate: "Varies",
-    threshold: "Local borough/city only",
     website: "https://arsstc.org",
     status: "Pending",
   },
@@ -43,7 +49,6 @@ const taxData = [
     state: "Arizona",
     filingFrequency: "Monthly",
     dueDate: "20th",
-    threshold: "> $8,000 tax/yr",
     website: "https://aztaxes.gov",
     status: "Paid",
   },
@@ -51,7 +56,6 @@ const taxData = [
     state: "Arkansas",
     filingFrequency: "Monthly",
     dueDate: "20th",
-    threshold: "> $100/mo",
     website: "https://atap.arkansas.gov",
     status: "Paid",
   },
@@ -59,7 +63,6 @@ const taxData = [
     state: "California",
     filingFrequency: "Monthly",
     dueDate: "Last day",
-    threshold: "> $17,000/yr",
     website: "https://onlineservices.cdtfa.ca.gov",
     status: "Pending",
   },
@@ -67,7 +70,6 @@ const taxData = [
     state: "Colorado",
     filingFrequency: "Monthly",
     dueDate: "20th",
-    threshold: "> $300/mo",
     website: "https://mybiz.colorado.gov",
     status: "Paid",
   },
@@ -75,9 +77,11 @@ const taxData = [
 
 const TaxationPage = () => {
   const [isAddNewTaxModalOpen, setIsAddNewTaxModalOpen] = useState(false);
+  const [taxRows, setTaxRows] = useState<TaxRow[]>(initialTaxData);
   const [dateRange, setDateRange] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
-  const [frequencyFilter, setFrequencyFilter] = useState("monthly");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   const handleOpenAddNewTaxModal = () => {
     setIsAddNewTaxModalOpen(true);
@@ -86,6 +90,34 @@ const TaxationPage = () => {
   const handleCloseAddNewTaxModal = () => {
     setIsAddNewTaxModalOpen(false);
   };
+
+  const handleMarkAsPaid = (state: string) => {
+    setTaxRows((prev) =>
+      prev.map((row) =>
+        row.state === state ? { ...row, status: "Paid" } : row,
+      ),
+    );
+  };
+
+  const filteredRows = useMemo(
+    () =>
+      taxRows.filter((row) => {
+        const sf = statusFilter?.toLowerCase();
+        if (sf && sf !== "all") {
+          if (row.status.toLowerCase() !== sf) return false;
+        }
+        return true;
+      }),
+    [statusFilter, taxRows],
+  );
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedRows = useMemo(() => {
+    const start = (safeCurrentPage - 1) * rowsPerPage;
+    return filteredRows.slice(start, start + rowsPerPage);
+  }, [filteredRows, rowsPerPage, safeCurrentPage]);
 
   return (
     <div className="xl:px-5 px-2 md:pt-5 pb-10 space-y-6">
@@ -114,7 +146,7 @@ const TaxationPage = () => {
         </div>
 
         <div className="bg-white py-6 border-t border-b my-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-600">
                 Date Range
@@ -134,7 +166,13 @@ const TaxationPage = () => {
               <label className="text-sm font-medium text-gray-600">
                 Status
               </label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select
+                value={statusFilter}
+                onValueChange={(value) => {
+                  setStatusFilter(value);
+                  setCurrentPage(1);
+                }}
+              >
                 <SelectTrigger className="w-full bg-white border-gray-200">
                   <SelectValue placeholder="All" />
                 </SelectTrigger>
@@ -142,24 +180,6 @@ const TaxationPage = () => {
                   <SelectItem value="all">All</SelectItem>
                   <SelectItem value="paid">Paid</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-600">
-                Filing Frequency
-              </label>
-              <Select
-                value={frequencyFilter}
-                onValueChange={setFrequencyFilter}
-              >
-                <SelectTrigger className="w-full bg-white border-gray-200">
-                  <SelectValue placeholder="Monthly" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="quarterly">Quarterly</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -182,74 +202,83 @@ const TaxationPage = () => {
                     DUE DATE
                   </th>
                   <th className="text-left py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    THRESHOLD / PARAMETERS
-                  </th>
-                  <th className="text-left py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">
                     WEBSITE TO FILE
                   </th>
                   <th className="text-left py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">
                     STATUS
                   </th>
+                  <th className="text-left py-4 px-6 text-xs font-bold text-gray-500 uppercase tracking-wider">
+                    ACTION
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {taxData
-                  .filter((row) => {
-                    const sf = statusFilter?.toLowerCase();
-                    const ff = frequencyFilter?.toLowerCase();
-                    if (sf && sf !== "all") {
-                      if (row.status.toLowerCase() !== sf) return false;
-                    }
-                    if (ff && ff !== "all") {
-                      if (row.filingFrequency.toLowerCase() !== ff)
-                        return false;
-                    }
-                    return true;
-                  })
-                  .map((row, idx) => (
-                    <tr
-                      key={idx}
-                      className="hover:bg-gray-50/50 transition-colors"
-                    >
-                      <td className="py-4 px-6 text-sm text-gray-900">
-                        {row.state}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900">
-                        {row.filingFrequency}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900">
-                        {row.dueDate}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900">
-                        {row.threshold}
-                      </td>
-                      <td className="py-4 px-6 text-sm text-gray-900 underline cursor-pointer">
+                {paginatedRows.map((row) => (
+                  <tr
+                    key={row.state}
+                    className="hover:bg-gray-50/50 transition-colors"
+                  >
+                    <td className="py-4 px-6 text-sm text-gray-900">
+                      {row.state}
+                    </td>
+                    <td className="py-4 px-6 text-sm text-gray-900">
+                      {row.filingFrequency}
+                    </td>
+                    <td className="py-4 px-6 text-sm text-gray-900">
+                      {row.dueDate}
+                    </td>
+                    <td className="py-4 px-6 text-sm text-gray-900 underline cursor-pointer">
+                      <a
+                        href={row.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:text-blue-700"
+                      >
                         {row.website}
-                      </td>
-                      <td className="py-4 px-6 text-sm">
-                        <span
-                          className={cn(
-                            "px-3 py-1 rounded-full text-xs font-medium",
-                            row.status === "Paid"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-yellow-100 text-yellow-700"
-                          )}
+                      </a>
+                    </td>
+                    <td className="py-4 px-6 text-sm">
+                      <span
+                        className={cn(
+                          "px-3 py-1 rounded-full text-xs font-medium",
+                          row.status === "Paid"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-yellow-100 text-yellow-700",
+                        )}
+                      >
+                        {row.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-6 text-sm">
+                      {row.status === "Pending" ? (
+                        <Button
+                          size="sm"
+                          className="h-6 rounded-full border-yellow-200 bg-yellow-100 px-4 text-yellow-700 hover:bg-yellow-200 hover:text-yellow-800"
+                          onClick={() => handleMarkAsPaid(row.state)}
                         >
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                          Mark as Paid
+                        </Button>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-            <Pagination
-              totalItems={0}
-              currentPage={0}
-              rowsPerPage={0}
-              onPageChange={() => {}}
-              onRowsPerPageChange={() => {}}
-            />
           </div>
+          <Pagination
+            totalItems={filteredRows.length}
+            currentPage={safeCurrentPage}
+            rowsPerPage={rowsPerPage}
+            onPageChange={(page) => {
+              setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+            }}
+            onRowsPerPageChange={(rows) => {
+              setRowsPerPage(rows);
+              setCurrentPage(1);
+            }}
+          />
         </div>
 
         {/* Summary Stats */}
