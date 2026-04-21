@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import {
   UserPlus,
@@ -31,85 +32,143 @@ import {
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import FilterTabs, { type Period } from "@/components/FilterTabs";
+import { apiClient } from "@/modules/auth/auth.api";
 
-// Mock data - replace with actual API calls
-const now = new Date();
-const daysAgo = (n: number) => {
-  const d = new Date(now);
-  d.setDate(d.getDate() - n);
-  return d;
+type LeadsStatsData = {
+  total: number;
+  assigned: number;
+  unassigned: number;
+  unreadMessages: number;
 };
 
-const initialLeads = [
-  {
-    id: "ID-2025-1047",
-    name: "John Doe",
-    workshop: "Workshop",
-    category: "Texas",
-    assignedTo: null,
-    assignedToName: "",
-    assignmentStatus: "Assign",
-    score: 25,
-    progress: 3,
-    progressStep: "Step 4/7",
-    status: "Proposal sent",
-    statusColor: "purple",
-    quoteValue: "$12,500",
-    chatCount: 2,
-    createdAt: daysAgo(0), // today
-  },
-  {
-    id: "ID-2025-1048",
-    name: "Jane Smith",
-    workshop: "Garage",
-    category: "Texas",
-    assignedTo: "Sarah Lee",
-    assignedToName: "Sarah Lee",
-    assignmentStatus: "1 person assigned",
-    score: 45,
-    progress: 3,
-    progressStep: "Step 4/7",
-    status: "Quotation Sent",
-    statusColor: "orange",
-    quoteValue: "$125,000",
-    chatCount: 4,
-    createdAt: daysAgo(2), // a few days ago
-  },
-  {
-    id: "ID-2025-1049",
-    name: "Bob Johnson",
-    workshop: "Workshop",
-    category: "Texas",
-    assignedTo: "Sarah Lee",
-    assignedToName: "Sarah Lee",
-    assignmentStatus: "1 person assigned",
-    score: 72,
-    progress: 3,
-    progressStep: "Step 4/7",
-    status: "Proposal sent",
-    statusColor: "purple",
-    quoteValue: "$220,000",
-    chatCount: 2,
-    createdAt: daysAgo(5), // within the week
-  },
-  {
-    id: "ID-2025-1050",
-    name: "Alice Green",
-    workshop: "Commercial",
-    category: "Texas",
-    assignedTo: "Sarah Lee",
-    assignedToName: "Sarah Lee",
-    assignmentStatus: "1 person assigned",
-    score: 88,
-    progress: 3,
-    progressStep: "Step 4/7",
-    status: "Closed",
-    statusColor: "green",
-    quoteValue: "$45,000",
-    chatCount: 2,
-    createdAt: daysAgo(20), // earlier this month
-  },
-];
+type AdminLead = {
+  _id: string;
+  customerId?: {
+    customerId?: string;
+    firstName?: string;
+  };
+  buildingType?: string;
+  location?: string;
+  assignedSales?: {
+    name?: string;
+  } | null;
+  quoteValue?: number;
+  lifecycleStatus?: string;
+  leadScoring?: {
+    score?: number;
+  };
+  createdAt: string;
+};
+
+type AdminLeadsData = {
+  leads: AdminLead[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+type LeadsStatsResponse = {
+  success: boolean;
+  message: string;
+  data: LeadsStatsData;
+};
+
+type AdminLeadsResponse = {
+  success: boolean;
+  message: string;
+  data: AdminLeadsData;
+};
+
+type LeadTableRow = {
+  id: string;
+  backendId?: string;
+  name: string;
+  workshop: string;
+  category: string;
+  assignedTo: string | null;
+  assignedToName: string;
+  assignmentStatus: string;
+  score: number;
+  progress: number;
+  progressStep: string;
+  status: string;
+  statusColor: string;
+  quoteValue: string;
+  chatCount: number;
+  createdAt: Date;
+};
+
+type StatCardSkeletonProps = {
+  color: string;
+};
+
+function StatCardSkeleton({ color }: StatCardSkeletonProps) {
+  return (
+    <div
+      className={`sm:p-5 px-3 py-5 rounded-md border-none ${color} animate-pulse`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="space-y-2 w-full">
+          <div className="h-3 w-24 rounded bg-white/35" />
+          <div className="h-6 w-20 rounded bg-white/45" />
+        </div>
+
+        <div className="bg-white/65 sm:p-2 p-1 rounded-md">
+          <div className="size-7 rounded bg-white/80" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function getLeadsStatsProvider() {
+  const response = await apiClient.get<LeadsStatsResponse>(
+    "/api/admin/leads/stats",
+  );
+
+  return response.data;
+}
+
+async function getAdminLeadsProvider(page = 1, limit = 20) {
+  const response = await apiClient.get<AdminLeadsResponse>("/api/admin/leads", {
+    params: { page, limit },
+  });
+
+  return response.data;
+}
+
+const formatTitleCase = (value: string) =>
+  value
+    .replace(/[_-]/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
+
+const getLifecycleUi = (lifecycleStatus?: string) => {
+  switch (lifecycleStatus) {
+    case "proposal_sent":
+      return { status: "Proposal sent", statusColor: "purple" };
+    case "quotation_sent":
+      return { status: "Quotation Sent", statusColor: "orange" };
+    case "closed_won":
+      return { status: "Closed", statusColor: "green" };
+    case "negotiation":
+      return { status: "Negotiation", statusColor: "orange" };
+    default:
+      return {
+        status: lifecycleStatus
+          ? formatTitleCase(lifecycleStatus)
+          : "Initial Contact",
+        statusColor: "blue",
+      };
+  }
+};
 
 export default function LeadsPage() {
   const [buildingType, setBuildingType] = useState("all");
@@ -117,12 +176,54 @@ export default function LeadsPage() {
   const [assignments, setAssignments] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [period, setPeriod] = useState<Period>("Month");
-  const [leads] = useState(initialLeads);
   const [selectedLeads, setSelectedLeads] = useState<string[]>([]);
   const [successOpen, setSuccessOpen] = useState(false);
+  const page = 1;
+  const limit = 20;
+  const { data: leadsStatsResponse, isLoading: isLeadsStatsLoading } = useQuery(
+    {
+      queryKey: ["leads", "admin", "stats"],
+      queryFn: getLeadsStatsProvider,
+      staleTime: 60 * 1000,
+    },
+  );
+  const { data: leadsResponse, isLoading: isLeadsLoading } = useQuery({
+    queryKey: ["leads", "admin", "list", page, limit],
+    queryFn: () => getAdminLeadsProvider(page, limit),
+    staleTime: 60 * 1000,
+  });
+
+  const leadsStats = leadsStatsResponse?.data;
+  const leads: LeadTableRow[] = (leadsResponse?.data.leads ?? []).map(
+    (lead) => {
+      const lifecycleUi = getLifecycleUi(lead.lifecycleStatus);
+      const assignedToName = lead.assignedSales?.name ?? "";
+
+      return {
+        id: lead.customerId?.customerId ?? "",
+        backendId: lead._id,
+        name: lead.customerId?.firstName ?? "Unknown Customer",
+        workshop: lead.buildingType
+          ? formatTitleCase(lead.buildingType)
+          : "Not set",
+        category: lead.location?.trim() ? lead.location : "Not set",
+        assignedTo: assignedToName || null,
+        assignedToName,
+        assignmentStatus: assignedToName ? "1 person assigned" : "Assign",
+        score: lead.leadScoring?.score ?? 0,
+        progress: 0,
+        progressStep: "Step 0/7",
+        status: lifecycleUi.status,
+        statusColor: lifecycleUi.statusColor,
+        quoteValue: formatCurrency(lead.quoteValue ?? 0),
+        chatCount: 0,
+        createdAt: new Date(lead.createdAt),
+      };
+    },
+  );
   // const [searchQuery, setSearchQuery] = useState("");
 
-  const handleSelectAll = (checked: boolean, listToSelect: typeof leads) => {
+  const handleSelectAll = (checked: boolean, listToSelect: LeadTableRow[]) => {
     if (checked) {
       setSelectedLeads(listToSelect.map((lead) => lead.id));
     } else {
@@ -257,35 +358,45 @@ export default function LeadsPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            title="Total Leads"
-            value={String(filteredLeads.length)}
-            color="bg-blue-600"
-            icon={<Users className="h-5 w-5 text-blue-600" />}
-          />
-          <StatCard
-            title="Assigned"
-            value={String(filteredLeads.filter((l) => l.assignedTo).length)}
-            color="bg-green-600"
-            icon={<UserCheck className="h-5 w-5 text-green-600" />}
-          />
-          <StatCard
-            title="Unassigned"
-            value={String(filteredLeads.filter((l) => !l.assignedTo).length)}
-            color="bg-yellow-500"
-            icon={<UserX className="h-5 w-5 text-yellow-600" />}
-          />
-          <StatCard
-            title="Unopened Message"
-            value={String(
-              filteredLeads.reduce(
-                (acc, l) => acc + (l.chatCount > 0 ? 1 : 0),
-                0,
-              ),
-            )}
-            color="bg-orange-500"
-            icon={<Mail className="h-5 w-5 text-orange-600" />}
-          />
+          {isLeadsStatsLoading ? (
+            <>
+              {[
+                "bg-blue-600",
+                "bg-green-600",
+                "bg-yellow-500",
+                "bg-orange-500",
+              ].map((color, index) => (
+                <StatCardSkeleton key={index} color={color} />
+              ))}
+            </>
+          ) : (
+            <>
+              <StatCard
+                title="Total Leads"
+                value={String(leadsStats?.total ?? 0)}
+                color="bg-blue-600"
+                icon={<Users className="h-5 w-5 text-blue-600" />}
+              />
+              <StatCard
+                title="Assigned"
+                value={String(leadsStats?.assigned ?? 0)}
+                color="bg-green-600"
+                icon={<UserCheck className="h-5 w-5 text-green-600" />}
+              />
+              <StatCard
+                title="Unassigned"
+                value={String(leadsStats?.unassigned ?? 0)}
+                color="bg-yellow-500"
+                icon={<UserX className="h-5 w-5 text-yellow-600" />}
+              />
+              <StatCard
+                title="Unopened Message"
+                value={String(leadsStats?.unreadMessages ?? 0)}
+                color="bg-orange-500"
+                icon={<Mail className="h-5 w-5 text-orange-600" />}
+              />
+            </>
+          )}
         </div>
 
         {/* Action Buttons and Filters */}
@@ -409,6 +520,16 @@ export default function LeadsPage() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
+                  {isLeadsLoading && (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-6 py-8 text-center text-sm text-gray-500"
+                      >
+                        Loading leads...
+                      </td>
+                    </tr>
+                  )}
                   {filteredLeads.map((lead, index) => (
                     <tr key={lead.id + index} className="hover:bg-gray-50">
                       <td className="px-3 py-2 sm:px-4 sm:py-4">
@@ -572,7 +693,7 @@ export default function LeadsPage() {
                       </td>
                     </tr>
                   ))}
-                  {filteredLeads.length === 0 && (
+                  {!isLeadsLoading && filteredLeads.length === 0 && (
                     <tr>
                       <td
                         colSpan={8}
