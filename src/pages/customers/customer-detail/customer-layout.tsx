@@ -11,20 +11,64 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import StatCard from "@/components/ui/stat-card";
+import { useCustomerDetailQuery } from "@/modules/customers/customers.hooks";
+
+function formatCurrency(value = 0) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatJoinedDate(value?: string) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default function CustomerDetailLayout() {
   const navigate = useNavigate();
   const params = useParams();
   const id = params.id ?? "unknown";
 
+  const {
+    data: customerDetailResponse,
+    isLoading,
+    isError,
+  } = useCustomerDetailQuery(id);
+
+  const customerData = customerDetailResponse?.data.customer;
+
+  const customerName =
+    `${customerData?.firstName ?? ""} ${customerData?.lastName ?? ""}`.trim() ||
+    "-";
+
+  const phoneNumber = customerData?.phone?.number ?? "";
+  const phoneCountryCode = customerData?.phone?.countryCode ?? "";
+  const phone =
+    phoneCountryCode && phoneNumber
+      ? `${phoneCountryCode} ${phoneNumber}`
+      : phoneNumber || "-";
+
+  const joinedDate = formatJoinedDate(customerData?.createdAt);
+
   const customer = {
-    id,
-    customerName: "John Doe",
-    email: "luca.moretti@eurobuild.it",
-    phone: "+39 02 8945 2231",
-    inquiryFor: "Garage",
-    status: "Active",
-    joined: "January 15, 2023",
+    id: customerData?.customerId ?? customerData?._id ?? id,
+    customerName,
+    email: customerData?.email ?? "-",
+    phone,
+    inquiryFor:
+      customerDetailResponse?.data.projects?.[0]?.buildingType?.trim() || "-",
+    status: customerData?.isActive ? "Active" : "Inactive",
+    joined: joinedDate,
   };
 
   return (
@@ -61,6 +105,14 @@ export default function CustomerDetailLayout() {
         </div>
       </div>
 
+      {isError ? (
+        <Card className="p-4">
+          <CardContent className="px-0 py-0 text-sm text-red-600">
+            Failed to load customer details. Please refresh and try again.
+          </CardContent>
+        </Card>
+      ) : null}
+
       {/* Profile Card */}
       <Card className="p-4">
         {/* <CardHeader>
@@ -83,7 +135,7 @@ export default function CustomerDetailLayout() {
             <div className="space-y-2 md:space-y-0">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900">
-                  {customer.customerName}
+                  {isLoading ? "Loading..." : customer.customerName}
                 </h2>
                 <p className="text-sm text-gray-500">{customer.id}</p>
                 <p className="text-sm text-gray-500">
@@ -123,25 +175,25 @@ export default function CustomerDetailLayout() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Paid"
-          value="$1,850"
+          value={formatCurrency(customerDetailResponse?.data.totalPaid ?? 0)}
           color="bg-[#1D51A4]"
           icon={<DollarSign className="h-5 w-5 text-[#1D51A4]" />}
         />
         <StatCard
           title="Pending Payment"
-          value="$2,125"
+          value={formatCurrency(customerDetailResponse?.data.totalPending ?? 0)}
           color="bg-[#FD8D5B]"
           icon={<Clock3 className="h-5 w-5 text-[#FD8D5B]" />}
         />
         <StatCard
           title="Total Invoices"
-          value="4"
+          value={String(customerDetailResponse?.data.totalInvoices ?? 0)}
           color="bg-[#EAB308]"
           icon={<FileText className="h-5 w-5 text-[#EAB308]" />}
         />
         <StatCard
           title="Revenue Generated"
-          value="$4,125"
+          value={formatCurrency(customerDetailResponse?.data.totalPaid ?? 0)}
           color="bg-[#A855F7]"
           icon={<DollarSign className="h-5 w-5 text-[#A855F7]" />}
         />
