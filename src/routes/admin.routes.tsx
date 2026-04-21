@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router";
 import { lazy } from "react";
 import { NotFound } from "@/pages/not-found";
 import { AdminLayout } from "@/components/admin-layout";
+import { ProtectedRoute, PublicOnlyRoute } from "@/modules/auth/auth.guards";
 
 const SignIn = lazy(() => import("@/pages/sign-in"));
 const Notifications = lazy(() => import("@/pages/notifications"));
@@ -214,314 +215,329 @@ const DrawingAttachment = lazy(
 
 export const adminRoutes: RouteObject[] = [
   {
-    // path: "/sign-in",
-    path: "/",
-    element: <SignIn />,
+    element: <PublicOnlyRoute />,
+    children: [
+      {
+        path: "/sign-in",
+        element: <SignIn />,
+      },
+    ],
   },
   {
-    path: "/",
-    element: <AdminLayout />,
+    element: <ProtectedRoute />,
     children: [
-      // { index: true, element: <Dashboard /> },
-      { path: "dashboard", element: <Dashboard /> },
-      { path: "sales-tax-filing", element: <SalesTaxFiling /> },
-      { path: "pipeline-stages", element: <PipelineStages /> },
-      { path: "sales-tax", element: <SalesTaxReportingLegacy /> },
-
-      // leads routes
       {
-        path: "leads",
+        path: "/",
+        element: <AdminLayout />,
         children: [
-          { index: true, element: <Leads /> },
-          { path: "add", element: <AddNewLead /> },
-          { path: "escalated", element: <EscalatedLeads /> },
-          { path: "ai-marketing", element: <AIMarketing /> },
-          { path: "purchase-orders", element: <AllPurchaseOrders /> },
+          { index: true, element: <Dashboard /> },
+          { path: "dashboard", element: <Dashboard /> },
+          { path: "sales-tax-filing", element: <SalesTaxFiling /> },
+          { path: "pipeline-stages", element: <PipelineStages /> },
+          { path: "sales-tax", element: <SalesTaxReportingLegacy /> },
 
-          // /leads/follow-up routes
+          // leads routes
           {
-            path: "follow-up",
+            path: "leads",
             children: [
-              { index: true, element: <FollowUp /> },
+              { index: true, element: <Leads /> },
+              { path: "add", element: <AddNewLead /> },
+              { path: "escalated", element: <EscalatedLeads /> },
+              { path: "ai-marketing", element: <AIMarketing /> },
+              { path: "purchase-orders", element: <AllPurchaseOrders /> },
+
+              // /leads/follow-up routes
               {
-                path: "communication-timeline",
-                element: <LeadCommunicationTimelinePage />,
-              },
-              {
-                path: "script-generator",
-                element: <AiScriptGeneratorPage />,
-              },
-              {
-                path: "scoring",
-                element: <LeadScoring />,
-              },
-              {
-                path: "kpis",
-                element: <FollowUpKpis />,
-              },
-              {
-                path: "smart-reminders",
+                path: "follow-up",
                 children: [
-                  { index: true, element: <SmartReminders /> },
+                  { index: true, element: <FollowUp /> },
                   {
-                    path: ":id",
-                    element: <SmartReminderDetail />,
+                    path: "communication-timeline",
+                    element: <LeadCommunicationTimelinePage />,
+                  },
+                  {
+                    path: "script-generator",
+                    element: <AiScriptGeneratorPage />,
+                  },
+                  {
+                    path: "scoring",
+                    element: <LeadScoring />,
+                  },
+                  {
+                    path: "kpis",
+                    element: <FollowUpKpis />,
+                  },
+                  {
+                    path: "smart-reminders",
+                    children: [
+                      { index: true, element: <SmartReminders /> },
+                      {
+                        path: ":id",
+                        element: <SmartReminderDetail />,
+                      },
+                    ],
+                  },
+                ],
+              },
+
+              // /leads/:leadId routes
+              {
+                path: ":leadId",
+                children: [
+                  { path: "edit", element: <EditLead /> },
+                  { path: "timeline", element: <SingleLeadTimelinePage /> },
+                  {
+                    path: "emails",
+                    element: <SingleLeadEmailsPage />,
+                  },
+                  {
+                    path: "chats",
+                    element: <SingleLeadChatsPage />,
+                  },
+                  {
+                    path: "notes",
+                    element: <SingleLeadNotesPage />,
+                  },
+                  {
+                    path: "calls",
+                    element: <SingleLeadCallsPage />,
+                  },
+                  {
+                    path: "payments",
+                    element: <LeadPaymentsPage />,
                   },
                 ],
               },
             ],
           },
 
-          // /leads/:leadId routes
+          // customers routes
           {
-            path: ":leadId",
+            path: "customers",
             children: [
-              { path: "edit", element: <EditLead /> },
-              { path: "timeline", element: <SingleLeadTimelinePage /> },
-              {
-                path: "emails",
-                element: <SingleLeadEmailsPage />,
-              },
-              {
-                path: "chats",
-                element: <SingleLeadChatsPage />,
-              },
-              {
-                path: "notes",
-                element: <SingleLeadNotesPage />,
-              },
-              {
-                path: "calls",
-                element: <SingleLeadCallsPage />,
-              },
-              {
-                path: "payments",
-                element: <LeadPaymentsPage />,
-              },
-            ],
-          },
-        ],
-      },
+              { index: true, element: <Customers /> },
+              { path: "insights", element: <CustomerInsights /> },
 
-      // customers routes
-      {
-        path: "customers",
-        children: [
-          { index: true, element: <Customers /> },
-          { path: "insights", element: <CustomerInsights /> },
-
-          // /customers/meetings routes
-          {
-            path: "meetings",
-            children: [
-              { index: true, element: <Meetings /> },
-              { path: "schedule", element: <ScheduleMeeting /> },
+              // /customers/meetings routes
               {
-                path: "reschedule/:id",
-                element: <ScheduleMeeting />,
+                path: "meetings",
+                children: [
+                  { index: true, element: <Meetings /> },
+                  { path: "schedule", element: <ScheduleMeeting /> },
+                  {
+                    path: "reschedule/:id",
+                    element: <ScheduleMeeting />,
+                  },
+                ],
               },
-            ],
-          },
-          {
-            path: "contracts",
-            children: [
-              { index: true, element: <Contracts /> },
-              { path: ":id", element: <ContractDetail /> },
+              {
+                path: "contracts",
+                children: [
+                  { index: true, element: <Contracts /> },
+                  { path: ":id", element: <ContractDetail /> },
+                ],
+              },
+
+              // /customers/:id routes
+              {
+                path: ":id",
+                element: <CustomerDetailLayout />,
+                children: [
+                  { index: true, element: <CustomerInfo /> },
+                  { path: "payments", element: <CustomerPayments /> },
+                  { path: "status", element: <CustomerStatus /> },
+                  { path: "order", element: <CustomerOrder /> },
+                ],
+              },
+              { path: ":id/edit", element: <EditCustomerDetailsPage /> },
+              { path: ":id/projects/new", element: <AddNewProjectPage /> },
             ],
           },
 
-          // /customers/:id routes
+          //  payments routes
           {
-            path: ":id",
-            element: <CustomerDetailLayout />,
+            path: "payments",
             children: [
-              { index: true, element: <CustomerInfo /> },
-              { path: "payments", element: <CustomerPayments /> },
-              { path: "status", element: <CustomerStatus /> },
-              { path: "order", element: <CustomerOrder /> },
+              { index: true, element: <Payments /> },
+              { path: "sales-tax-reporting", element: <SalesTaxReporting /> },
+              {
+                path: "detailed-tax-report",
+                element: <DetailedTaxReportPage />,
+              },
+              { path: "taxation", element: <PaymentTaxationPage /> },
+              {
+                path: "customer/:customerId",
+                element: <CustomerPaymentProfile />,
+              },
             ],
           },
-          { path: ":id/edit", element: <EditCustomerDetailsPage /> },
-          { path: ":id/projects/new", element: <AddNewProjectPage /> },
+
+          // employees routes
+          {
+            path: "employees",
+            children: [
+              { index: true, element: <Employees /> },
+              { path: "performance", element: <EmployeePerformance /> },
+              { path: "audit-log", element: <EmployeeAuditLog /> },
+              { path: ":id", element: <EmployeeProfile /> },
+            ],
+          },
+
+          // global routes
+          { path: "notifications", element: <Notifications /> },
+          {
+            path: "communication",
+            children: [
+              { index: true, element: <Communication /> },
+              { path: "ai-chat", element: <AIChat /> },
+            ],
+          },
+          {
+            path: "analytics",
+            element: <Analytics />,
+          },
+          {
+            path: "settings",
+            element: <Settings />,
+          },
+          {
+            path: "profile",
+            element: <Profile />,
+          },
+
+          // invoice routes
+          {
+            path: "invoice",
+            children: [
+              { index: true, element: <InvoiceForm /> },
+              { path: "list", element: <InvoiceList /> },
+              { path: "preview", element: <InvoicePreviewPage /> },
+              { path: "new", element: <InvoiceForm /> },
+              { path: ":id", element: <InvoiceForm /> },
+              { path: "sales-growth", element: <SalesGrowth /> },
+            ],
+          },
+
+          //plants routes
+          {
+            path: "plant",
+            children: [
+              { index: true, element: <PlantDashboard /> },
+              { path: "equipment_management", element: <EquipmentView /> },
+              {
+                path: "material_inventory_management",
+                element: <MaterialInventoryView />,
+              },
+              {
+                path: "production_management",
+                element: <ProductionManagementView />,
+              },
+              {
+                path: "maintenance_logs",
+                element: <MaintenanceAndSchedulingView />,
+              },
+              {
+                path: "upcoming_schedule",
+                element: <UpcomingScheduleView />,
+              },
+              {
+                path: "breakdown_cases",
+                element: <BreakdownCasesView />,
+              },
+              {
+                path: "service_providers",
+                element: <ServiceProvidersView />,
+              },
+              {
+                path: "equipment_allocation",
+                element: <EquipmentAllocationView />,
+              },
+              {
+                path: "transfer_requests",
+                element: <TransferRequestsView />,
+              },
+              {
+                path: "usage_tracking",
+                element: <UsageTrackingView />,
+              },
+            ],
+          },
+
+          // Financial accounts routes
+          {
+            path: "/accounts",
+            children: [
+              { index: true, element: <AccountsDashboard /> },
+              {
+                path: "",
+                element: <AccountsDashboard />,
+              },
+              {
+                path: "payment_overview",
+                element: <PaymentOverview />,
+              },
+              {
+                path: "payments/new-invoice",
+                element: <NewInvoice />,
+              },
+              {
+                path: "payments/invoice/preview",
+                element: <InvoicePreview />,
+              },
+              {
+                path: "order_payments",
+                element: <OrdersAndPaymentsPage />,
+              },
+              {
+                path: "cogs_analysis",
+                element: <CogsAnalysis />,
+              },
+
+              {
+                path: "expenses",
+                element: <ExpensesPage />,
+              },
+              {
+                path: "wip_profit",
+                element: <WipProfitPage />,
+              },
+              {
+                path: "reports",
+                element: <FinancialReportPage />,
+              },
+              {
+                path: "taxation",
+                element: <TaxationPage />,
+              },
+              {
+                path: "income",
+                element: <IncomePage />,
+              },
+              {
+                path: "labor_expenses",
+                element: <LaborExpensesPage />,
+              },
+            ],
+          },
+
+          // Construction Panel routes
+          {
+            path: "construction",
+            children: [
+              { index: true, element: <ConstructionDashboard /> },
+              { path: "projects", element: <Projects /> },
+              { path: "project-view-page", element: <ProjectViewPage /> },
+              { path: "drawing-attachment", element: <DrawingAttachment /> },
+              { path: "tasks", element: <Tasks /> },
+              { path: "materials", element: <Materials /> },
+              { path: "material-view-page", element: <MaterialsViewPage /> },
+              { path: "reports", element: <Reports /> },
+            ],
+          },
+
+          { path: "*", element: <NotFound /> },
         ],
       },
-
-      //  payments routes
-      {
-        path: "payments",
-        children: [
-          { index: true, element: <Payments /> },
-          { path: "sales-tax-reporting", element: <SalesTaxReporting /> },
-          { path: "detailed-tax-report", element: <DetailedTaxReportPage /> },
-          { path: "taxation", element: <PaymentTaxationPage /> },
-          { path: "customer/:customerId", element: <CustomerPaymentProfile /> },
-        ],
-      },
-
-      // employees routes
-      {
-        path: "employees",
-        children: [
-          { index: true, element: <Employees /> },
-          { path: "performance", element: <EmployeePerformance /> },
-          { path: "audit-log", element: <EmployeeAuditLog /> },
-          { path: ":id", element: <EmployeeProfile /> },
-        ],
-      },
-
-      // global routes
-      { path: "notifications", element: <Notifications /> },
-      {
-        path: "communication",
-        children: [
-          { index: true, element: <Communication /> },
-          { path: "ai-chat", element: <AIChat /> },
-        ],
-      },
-      {
-        path: "analytics",
-        element: <Analytics />,
-      },
-      {
-        path: "settings",
-        element: <Settings />,
-      },
-      {
-        path: "profile",
-        element: <Profile />,
-      },
-
-      // invoice routes
-      {
-        path: "invoice",
-        children: [
-          { index: true, element: <InvoiceForm /> },
-          { path: "list", element: <InvoiceList /> },
-          { path: "preview", element: <InvoicePreviewPage /> },
-          { path: "new", element: <InvoiceForm /> },
-          { path: ":id", element: <InvoiceForm /> },
-          { path: "sales-growth", element: <SalesGrowth /> },
-        ],
-      },
-
-      //plants routes
-      {
-        path: "plant",
-        children: [
-          { index: true, element: <PlantDashboard /> },
-          { path: "equipment_management", element: <EquipmentView /> },
-          {
-            path: "material_inventory_management",
-            element: <MaterialInventoryView />,
-          },
-          {
-            path: "production_management",
-            element: <ProductionManagementView />,
-          },
-          {
-            path: "maintenance_logs",
-            element: <MaintenanceAndSchedulingView />,
-          },
-          {
-            path: "upcoming_schedule",
-            element: <UpcomingScheduleView />,
-          },
-          {
-            path: "breakdown_cases",
-            element: <BreakdownCasesView />,
-          },
-          {
-            path: "service_providers",
-            element: <ServiceProvidersView />,
-          },
-          {
-            path: "equipment_allocation",
-            element: <EquipmentAllocationView />,
-          },
-          {
-            path: "transfer_requests",
-            element: <TransferRequestsView />,
-          },
-          {
-            path: "usage_tracking",
-            element: <UsageTrackingView />,
-          },
-        ],
-      },
-
-      // Financial accounts routes
-      {
-        path: "/accounts",
-        children: [
-          { index: true, element: <AccountsDashboard /> },
-          {
-            path: "",
-            element: <AccountsDashboard />,
-          },
-          {
-            path: "payment_overview",
-            element: <PaymentOverview />,
-          },
-          {
-            path: "payments/new-invoice",
-            element: <NewInvoice />,
-          },
-          {
-            path: "payments/invoice/preview",
-            element: <InvoicePreview />,
-          },
-          {
-            path: "order_payments",
-            element: <OrdersAndPaymentsPage />,
-          },
-          {
-            path: "cogs_analysis",
-            element: <CogsAnalysis />,
-          },
-
-          {
-            path: "expenses",
-            element: <ExpensesPage />,
-          },
-          {
-            path: "wip_profit",
-            element: <WipProfitPage />,
-          },
-          {
-            path: "reports",
-            element: <FinancialReportPage />,
-          },
-          {
-            path: "taxation",
-            element: <TaxationPage />,
-          },
-          {
-            path: "income",
-            element: <IncomePage />,
-          },
-          {
-            path: "labor_expenses",
-            element: <LaborExpensesPage />,
-          },
-        ],
-      },
-
-      // Construction Panel routes
-      {
-        path: "construction",
-        children: [
-          { index: true, element: <ConstructionDashboard /> },
-          { path: "projects", element: <Projects /> },
-          { path: "project-view-page", element: <ProjectViewPage /> },
-          { path: "drawing-attachment", element: <DrawingAttachment /> },
-          { path: "tasks", element: <Tasks /> },
-          { path: "materials", element: <Materials /> },
-          { path: "material-view-page", element: <MaterialsViewPage /> },
-          { path: "reports", element: <Reports /> },
-        ],
-      },
-
-      { path: "*", element: <NotFound /> },
     ],
   },
   { path: "*", element: <NotFound /> },
