@@ -12,11 +12,12 @@ import {
   Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useUpcomingFollowUpsQuery } from "@/modules/followups/followups.hooks";
 
 type ViewMode = "schedule" | "calendar" | "list";
 
 interface FollowUp {
-  id: number;
+  id: string;
   date: string;
   customer: string;
   type: string;
@@ -24,50 +25,76 @@ interface FollowUp {
   company?: string;
   status?: "overdue" | "upcoming" | "normal";
 }
-const mockFollowUps: FollowUp[] = [
-  {
-    id: 1,
-    date: "10",
-    customer: "Sarah Johnson",
-    type: "Call",
-    time: "10:00 AM",
-    company: "Tech Solutions Inc",
-    status: "overdue",
-  },
-  {
-    id: 2,
-    date: "16",
-    customer: "Michael Chen",
-    type: "Email",
-    time: "2:00 PM",
-    company: "StartupXYZ",
-    status: "upcoming",
-  },
-  {
-    id: 3,
-    date: "18",
-    customer: "Emily Davis",
-    type: "Meeting",
-    time: "4:30 PM",
-    company: "Enterprise Corp",
-    status: "normal",
-  },
-];
+
+function inferTypeFromNotes(notes?: string) {
+  const value = notes?.toLowerCase() ?? "";
+
+  if (value.includes("email")) {
+    return "Email";
+  }
+
+  if (value.includes("call")) {
+    return "Call";
+  }
+
+  if (value.includes("meeting")) {
+    return "Meeting";
+  }
+
+  return "Follow-up";
+}
 
 export default function UpcomingFollowUps() {
   const [viewMode, setViewMode] = useState<ViewMode>("calendar");
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const {
+    data: upcomingResponse,
+    isLoading,
+    isError,
+  } = useUpcomingFollowUpsQuery();
+
+  const followUps: FollowUp[] = (upcomingResponse?.data.followups ?? []).map(
+    (item) => {
+      const followUpDate = new Date(item.followUpDate);
+      const now = new Date();
+      const isOverdue =
+        item.status !== "completed" && followUpDate.getTime() < now.getTime();
+
+      const status: FollowUp["status"] = isOverdue
+        ? "overdue"
+        : item.status === "completed"
+          ? "normal"
+          : "upcoming";
+
+      const customer = item.customerId?.firstName?.trim() || "Unknown Customer";
+      const company =
+        item.leadId?.location || item.leadId?.buildingType || "N/A";
+
+      return {
+        id: item._id,
+        date: String(followUpDate.getDate()),
+        customer,
+        type: inferTypeFromNotes(item.notes),
+        time: followUpDate.toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        company,
+        status,
+      };
+    },
+  );
 
   const daysInMonth = Array.from({ length: 31 }, (_, i) => i + 1);
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   const getFollowUpForDay = (day: number) => {
-    return mockFollowUps.filter((f) => parseInt(f.date) === day);
+    return followUps.filter((f) => Number(f.date) === day);
   };
 
   const filteredFollowUps = selectedDay
-    ? mockFollowUps.filter((f) => parseInt(f.date) === selectedDay)
-    : mockFollowUps;
+    ? followUps.filter((f) => Number(f.date) === selectedDay)
+    : followUps;
 
   return (
     <Card className="p-6">
@@ -94,7 +121,7 @@ export default function UpcomingFollowUps() {
               "flex-1 px-3 h-8 text-xs",
               viewMode === "calendar"
                 ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "bg-transparent text-gray-600 hover:bg-gray-200"
+                : "bg-transparent text-gray-600 hover:bg-gray-200",
             )}
           >
             <Calendar className="w-3 h-3 mr-1" />
@@ -111,7 +138,7 @@ export default function UpcomingFollowUps() {
               "flex-1 px-3 h-8 text-xs",
               viewMode === "list"
                 ? "bg-blue-600 text-white hover:bg-blue-700"
-                : "bg-transparent text-gray-600 hover:bg-gray-200"
+                : "bg-transparent text-gray-600 hover:bg-gray-200",
             )}
           >
             <List className="w-3 h-3 mr-1" />
@@ -124,7 +151,19 @@ export default function UpcomingFollowUps() {
         Quick view of scheduled activities
       </p>
 
-      {viewMode === "calendar" && (
+      {isLoading && (
+        <div className="py-8 text-center text-sm text-gray-500">
+          Loading upcoming follow-ups...
+        </div>
+      )}
+
+      {isError && (
+        <div className="py-8 text-center text-sm text-red-500">
+          Failed to load upcoming follow-ups.
+        </div>
+      )}
+
+      {!isLoading && !isError && viewMode === "calendar" && (
         <div className="space-y-4">
           {/* Day names */}
           <div className="grid grid-cols-7 gap-2">
@@ -143,8 +182,8 @@ export default function UpcomingFollowUps() {
             {daysInMonth.map((day) => {
               const followUps = getFollowUpForDay(day);
               const hasFollowUp = followUps.length > 0;
-              const isOverdue = hasFollowUp && day < 23; // Mock overdue logic
-              const isToday = day === 23;
+              const isOverdue = followUps.some((f) => f.status === "overdue");
+              const isToday = day === new Date().getDate();
 
               return (
                 <div
@@ -158,7 +197,7 @@ export default function UpcomingFollowUps() {
                     isToday && "bg-blue-600 text-white font-bold",
                     selectedDay === day && "ring-2 ring-blue-400",
                     hasFollowUp && !isToday && "border-red-400",
-                    !hasFollowUp && !isToday && "text-gray-700"
+                    !hasFollowUp && !isToday && "text-gray-700",
                   )}
                 >
                   <span className="text-xs">{day}</span>
@@ -166,7 +205,7 @@ export default function UpcomingFollowUps() {
                     <span
                       className={cn(
                         "text-[10px] font-semibold",
-                        isOverdue ? "text-red-500" : "text-orange-500"
+                        isOverdue ? "text-red-500" : "text-orange-500",
                       )}
                     >
                       {day}+
@@ -179,7 +218,7 @@ export default function UpcomingFollowUps() {
         </div>
       )}
 
-      {viewMode === "list" && (
+      {!isLoading && !isError && viewMode === "list" && (
         <div className="space-y-2">
           {selectedDay && (
             <p className="text-sm text-gray-600">
@@ -199,8 +238,8 @@ export default function UpcomingFollowUps() {
               const bgClass = isOverdue
                 ? "bg-rose-100 border-rose-200"
                 : isUpcoming
-                ? "bg-amber-100 border-amber-200"
-                : "bg-rose-50 border-rose-100";
+                  ? "bg-amber-100 border-amber-200"
+                  : "bg-rose-50 border-rose-100";
 
               const Icon = (() => {
                 switch (followUp.type) {
@@ -221,7 +260,7 @@ export default function UpcomingFollowUps() {
                     "w-full p-4 rounded-md flex items-center justify-between",
                     "border",
                     "hover:shadow-sm",
-                    bgClass
+                    bgClass,
                   )}
                 >
                   <div className="flex items-center gap-3">
