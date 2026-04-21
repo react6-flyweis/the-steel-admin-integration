@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import StatCard from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,37 +15,12 @@ import LeadCommunicationTimeline from "@/components/leads/lead-communication-tim
 import AiScriptGenerator from "@/components/follow-up/ai-script-generator";
 import LeadScoring from "@/components/follow-up/lead-scoring";
 import FollowUpKpis from "@/components/follow-up/follow-up-kpis";
-import { apiClient } from "@/modules/auth/auth.api";
-
-type FollowUpStatsData = {
-  total: number;
-  upcoming: number;
-  completed: number;
-  overdue: number;
-};
-
-type FollowUpStatsResponse = {
-  success: boolean;
-  message: string;
-  data: FollowUpStatsData;
-};
-
-async function getFollowUpStatsProvider() {
-  const response = await apiClient.get<FollowUpStatsResponse>(
-    "/api/admin/followups/stats",
-  );
-
-  return response.data;
-}
+import { useFollowUpStatsQuery } from "@/modules/followups/followups.hooks";
 
 export default function FollowUpPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const { data: followUpStatsResponse, isLoading: isFollowUpStatsLoading } =
-    useQuery({
-      queryKey: ["followups", "admin", "stats"],
-      queryFn: getFollowUpStatsProvider,
-      staleTime: 60 * 1000,
-    });
+    useFollowUpStatsQuery();
 
   const followUpStats = followUpStatsResponse?.data;
 
