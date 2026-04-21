@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router";
 import {
   Dialog,
@@ -20,9 +21,12 @@ import QuotationDialog from "./quotation-dialog";
 import DocumentsDialog from "./documents-dialog";
 import DetailedLeadDialog from "./detailed-lead-dialog";
 import ConversationHistoryDialog from "./conversation-history-dialog";
+import { apiClient } from "@/modules/auth/auth.api";
+import { getApiErrorMessage } from "@/lib/api-error";
 
 type Lead = {
   id: string;
+  backendId?: string;
   name: string;
   workshop?: string;
   category?: string;
@@ -35,6 +39,49 @@ type Lead = {
   statusColor?: string;
   quoteValue?: string;
   chatCount?: number;
+};
+
+type LeadDetailResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    lead: {
+      _id: string;
+      customerId?: {
+        customerId?: string;
+        firstName?: string;
+        email?: string;
+        phone?: {
+          number?: string;
+          countryCode?: string;
+        };
+      };
+      buildingType?: string;
+      location?: string;
+      source?: string;
+      assignedSales?: {
+        _id?: string;
+        name?: string;
+      } | null;
+      quoteValue?: number;
+      lifecycleStatus?: string;
+      leadScoring?: {
+        score?: number;
+        scoreBreakdown?: {
+          projectSize?: { points?: number; reason?: string };
+          budgetSignals?: { points?: number; reason?: string };
+          timeline?: { points?: number; reason?: string };
+          decisionMaker?: { points?: number; reason?: string };
+          projectClarity?: { points?: number; reason?: string };
+        };
+      };
+      createdAt?: string;
+      updatedAt?: string;
+      documents?: unknown[];
+    };
+    recentMessages?: unknown[];
+    documents?: unknown[];
+  };
 };
 
 type ScoreBreakdownItem = {
@@ -127,6 +174,65 @@ const createMockScoreData = (seedInput: string) => {
   return { score, breakdown };
 };
 
+const formatTitleCase = (value: string) =>
+  value
+    .replace(/[_-]/g, " ")
+    .trim()
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount);
+
+const formatDate = (value?: string) => {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not available";
+  return date.toLocaleDateString("en-CA");
+};
+
+const getLifecycleUi = (lifecycleStatus?: string) => {
+  switch (lifecycleStatus) {
+    case "proposal_sent":
+      return { status: "Proposal sent", statusColor: "purple" };
+    case "quotation_sent":
+      return { status: "Quotation Sent", statusColor: "orange" };
+    case "closed_won":
+      return { status: "Closed", statusColor: "green" };
+    case "negotiation":
+      return { status: "Negotiation", statusColor: "orange" };
+    default:
+      return {
+        status: lifecycleStatus
+          ? formatTitleCase(lifecycleStatus)
+          : "Initial Contact",
+        statusColor: "blue",
+      };
+  }
+};
+
+const lifecycleSteps = [
+  "initial_contact",
+  "requirements_gathered",
+  "proposal_sent",
+  "quotation_sent",
+  "negotiation",
+  "closed_won",
+  "payment_done",
+  "delivered",
+];
+
+async function getAdminLeadDetailProvider(leadId: string) {
+  const response = await apiClient.get<LeadDetailResponse>(
+    `/api/admin/leads/${encodeURIComponent(leadId)}/detail`,
+  );
+
+  return response.data;
+}
+
 type Props = {
   lead: Lead;
   trigger?: React.ReactNode;
@@ -140,6 +246,7 @@ export default function LeadDetailDialog({
   open,
   onOpenChange,
 }: Props) {
+  const [internalOpen, setInternalOpen] = useState(false);
   const [isQuoteDialogOpen, setIsQuoteDialogOpen] = useState(false);
   const [isQuotationOpen, setIsQuotationOpen] = useState(false);
   const [isTrackDialogOpen, setIsTrackDialogOpen] = useState(false);
@@ -149,6 +256,92 @@ export default function LeadDetailDialog({
   const [isConversationHistoryOpen, setIsConversationHistoryOpen] =
     useState(false);
   const navigate = useNavigate();
+  const effectiveLeadId = lead.backendId ?? lead.id;
+  const isDialogOpen = open ?? internalOpen;
+
+  const {
+    data: leadDetailResponse,
+    isLoading: isLeadDetailLoading,
+    error: leadDetailError,
+  } = useQuery({
+    queryKey: ["leads", "admin-detail", effectiveLeadId],
+    queryFn: () => getAdminLeadDetailProvider(effectiveLeadId),
+    staleTime: 60 * 1000,
+    enabled: isDialogOpen && Boolean(effectiveLeadId),
+  });
+
+  const leadDetail:
+    | (LeadDetailResponse["data"]["lead"] & { updatedAt?: string })
+    | undefined = leadDetailResponse?.data.lead;
+  const lifecycleUi = getLifecycleUi(leadDetail?.lifecycleStatus);
+  const customer = leadDetail?.customerId;
+  const customerPhone = customer?.phone
+    ? `${customer.phone.countryCode ?? ""} ${customer.phone.number ?? ""}`.trim()
+    : "Not available";
+  const recentMessagesCount =
+    leadDetailResponse?.data.recentMessages?.length ?? 0;
+  const documentsCount =
+    leadDetailResponse?.data.documents?.length ??
+    leadDetail?.documents?.length ??
+    0;
+  const statusText = leadDetail?.lifecycleStatus
+    ? lifecycleUi.status
+    : (lead.status ?? "Initial Contact");
+  const statusColor = leadDetail?.lifecycleStatus
+    ? lifecycleUi.statusColor
+    : lead.statusColor;
+
+  const progressFromLifecycle = leadDetail?.lifecycleStatus
+    ? Math.max(lifecycleSteps.indexOf(leadDetail.lifecycleStatus), 0)
+    : (lead.progress ?? 0);
+
+  const apiScoreBreakdown = leadDetail?.leadScoring?.scoreBreakdown;
+  const normalizedScore =
+    leadDetail?.leadScoring?.score ?? createMockScoreData(lead.id).score;
+  const scoreBreakdown: ScoreBreakdownItem[] = apiScoreBreakdown
+    ? [
+        {
+          label: "Project Size",
+          value: apiScoreBreakdown.projectSize?.points ?? 0,
+          max: 25,
+          hint:
+            apiScoreBreakdown.projectSize?.reason ||
+            "Building scope and fit for your target segment",
+        },
+        {
+          label: "Budget Signals",
+          value: apiScoreBreakdown.budgetSignals?.points ?? 0,
+          max: 25,
+          hint:
+            apiScoreBreakdown.budgetSignals?.reason ||
+            "Budget confidence based on conversations",
+        },
+        {
+          label: "Timeline",
+          value: apiScoreBreakdown.timeline?.points ?? 0,
+          max: 20,
+          hint:
+            apiScoreBreakdown.timeline?.reason ||
+            "Urgency and readiness to move forward",
+        },
+        {
+          label: "Decision Maker",
+          value: apiScoreBreakdown.decisionMaker?.points ?? 0,
+          max: 15,
+          hint:
+            apiScoreBreakdown.decisionMaker?.reason ||
+            "Access to final buyer or key stakeholder",
+        },
+        {
+          label: "Project Clarity",
+          value: apiScoreBreakdown.projectClarity?.points ?? 0,
+          max: 15,
+          hint:
+            apiScoreBreakdown.projectClarity?.reason ||
+            "How specific the project details are",
+        },
+      ]
+    : createMockScoreData(lead.id).breakdown;
 
   const getStatusBadgeColor = (color: string | undefined) => {
     const colors: Record<string, string> = {
@@ -164,17 +357,12 @@ export default function LeadDetailDialog({
     "Initial Contact",
     "Requirements Gathered",
     "Proposal Sent",
+    "Quotation Sent",
     "Negotiation",
     "Deal Closed",
     "Payment Done",
     "Delivered",
   ];
-
-  const mockScoreData = React.useMemo(
-    () => createMockScoreData(lead.id),
-    [lead.id],
-  );
-  const normalizedScore = mockScoreData.score;
 
   const getScoreFillColorClass = (score: number) => {
     if (score < 30) return "bg-blue-500";
@@ -197,8 +385,15 @@ export default function LeadDetailDialog({
     return "HOT";
   };
 
-  const scoreBreakdown = mockScoreData.breakdown;
   const topActionButtonClass = "bg-gray-100 text-gray-700 border-gray-300";
+
+  const handleDialogOpenChange = (nextOpen: boolean) => {
+    if (open === undefined) {
+      setInternalOpen(nextOpen);
+    }
+
+    onOpenChange?.(nextOpen);
+  };
 
   const handleOpenPayments = () => {
     onOpenChange?.(false);
@@ -207,7 +402,7 @@ export default function LeadDetailDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
         <DialogTrigger asChild>
           {trigger ?? (
             <Button variant="ghost" size="sm" className="p-2 h-8 w-8">
@@ -220,7 +415,7 @@ export default function LeadDetailDialog({
           <DialogHeader className="border-b">
             <div className="flex items-center gap-4">
               <DialogTitle className="text-2xl">
-                Leads Details - {lead.name}
+                Leads Details - {customer?.firstName ?? lead.name}
               </DialogTitle>
               {/* edit lead button */}
               <Link to={`/leads/${lead.id}/edit`}>
@@ -228,9 +423,24 @@ export default function LeadDetailDialog({
               </Link>
             </div>
             <DialogDescription className="mt-1 text-sm text-gray-500">
-              {lead.id}
+              {customer?.customerId ?? lead.id}
             </DialogDescription>
           </DialogHeader>
+
+          {leadDetailError && (
+            <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {getApiErrorMessage(
+                leadDetailError,
+                "Failed to load lead details. Showing fallback data.",
+              )}
+            </div>
+          )}
+
+          {isLeadDetailLoading && (
+            <div className="mt-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+              Loading lead details...
+            </div>
+          )}
 
           <div className="mt-4 flex flex-col gap-6">
             <div className="flex flex-wrap gap-2">
@@ -300,21 +510,25 @@ export default function LeadDetailDialog({
                 <div className="mt-3 text-sm text-gray-700 space-y-3">
                   <div>
                     <div className="text-xs text-gray-500">Full Name</div>
-                    <div className="text-sm text-gray-900">{lead.name}</div>
+                    <div className="text-sm text-gray-900">
+                      {customer?.firstName ?? lead.name}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Email</div>
                     <div className="text-sm text-gray-900">
-                      john.doe@gmail.com
+                      {customer?.email ?? "Not available"}
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Phone</div>
-                    <div className="text-sm text-gray-900">(555) 123-4567</div>
+                    <div className="text-sm text-gray-900">{customerPhone}</div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Location</div>
-                    <div className="text-sm text-gray-900">{lead.category}</div>
+                    <div className="text-sm text-gray-900">
+                      {leadDetail?.location ?? lead.category ?? "Not available"}
+                    </div>
                   </div>
                   <div>
                     <Button
@@ -335,12 +549,18 @@ export default function LeadDetailDialog({
                 <div className="mt-3 text-sm text-gray-700 space-y-3">
                   <div>
                     <div className="text-xs text-gray-500">Building Type</div>
-                    <div className="text-sm text-gray-900">{lead.workshop}</div>
+                    <div className="text-sm text-gray-900">
+                      {leadDetail?.buildingType
+                        ? formatTitleCase(leadDetail.buildingType)
+                        : (lead.workshop ?? "Not available")}
+                    </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Quote Value</div>
                     <div className="text-sm text-gray-900">
-                      {lead.quoteValue}
+                      {typeof leadDetail?.quoteValue === "number"
+                        ? formatCurrency(leadDetail.quoteValue)
+                        : (lead.quoteValue ?? "Not available")}
                     </div>
                   </div>
                   <div>
@@ -348,15 +568,17 @@ export default function LeadDetailDialog({
                     <div className="mt-1">
                       <Badge
                         variant="secondary"
-                        className={getStatusBadgeColor(lead.statusColor || "")}
+                        className={getStatusBadgeColor(statusColor || "")}
                       >
-                        {lead.status}
+                        {statusText}
                       </Badge>
                     </div>
                   </div>
                   <div>
                     <div className="text-xs text-gray-500">Created On</div>
-                    <div className="text-sm text-gray-900">2024-10-10</div>
+                    <div className="text-sm text-gray-900">
+                      {formatDate(leadDetail?.createdAt)}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -373,10 +595,15 @@ export default function LeadDetailDialog({
                   </div>
                   <div>
                     <div className="text-sm font-medium">
-                      Assigned to: {lead.assignedToName ?? "Sarah Lee"}
+                      Assigned to:{" "}
+                      {leadDetail?.assignedSales?.name ??
+                        lead.assignedToName ??
+                        "Not assigned"}
                     </div>
                     <div className="text-xs text-gray-500">
-                      1 person working on this lead
+                      {leadDetail?.assignedSales?.name
+                        ? "1 person working on this lead"
+                        : "No sales assignee yet"}
                     </div>
                   </div>
                 </div>
@@ -446,7 +673,7 @@ export default function LeadDetailDialog({
                           </span>
                           <span
                             className={`font-semibold ${getScoreTextColorClass(
-                              itemPercent,
+                              item.value,
                             )}`}
                           >
                             {item.value}/{item.max}
@@ -455,7 +682,7 @@ export default function LeadDetailDialog({
                         <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
                           <div
                             className={`h-full rounded-full ${getScoreFillColorClass(
-                              itemPercent,
+                              item.value,
                             )}`}
                             style={{ width: `${itemPercent}%` }}
                           />
@@ -477,8 +704,8 @@ export default function LeadDetailDialog({
               <div className="space-y-3">
                 {progressSteps.map((step, i) => {
                   const idx = i + 1;
-                  const completed = idx <= (lead.progress ?? 0);
-                  const isCurrent = idx === (lead.progress ?? 0) + 1;
+                  const completed = idx <= progressFromLifecycle;
+                  const isCurrent = idx === progressFromLifecycle + 1;
                   return (
                     <div
                       key={step}
@@ -527,7 +754,8 @@ export default function LeadDetailDialog({
                 })}
               </div>
               <div className="mt-4 text-xs text-gray-500">
-                Progress: Step {(lead.progress ?? 0) + 1} of{" "}
+                Progress: Step{" "}
+                {Math.min(progressFromLifecycle + 1, progressSteps.length)} of{" "}
                 {progressSteps.length}
               </div>
             </div>
@@ -539,15 +767,15 @@ export default function LeadDetailDialog({
               <ul className="text-sm text-gray-700 space-y-2">
                 <li className="flex items-start gap-2">
                   <span className="h-2 w-2 mt-1 rounded-full bg-blue-500" />{" "}
-                  Last activity: 2024-10-18
+                  Last activity: {formatDate(leadDetail?.updatedAt)}
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="h-2 w-2 mt-1 rounded-full bg-blue-300" />{" "}
-                  Lead created: 2024-10-10
+                  Lead created: {formatDate(leadDetail?.createdAt)}
                 </li>
                 <li className="flex items-start gap-2">
-                  <span className="h-2 w-2 mt-1 rounded-full bg-red-500" /> 2
-                  unread messages
+                  <span className="h-2 w-2 mt-1 rounded-full bg-red-500" />
+                  {recentMessagesCount} unread messages
                 </li>
               </ul>
             </div>
@@ -560,7 +788,11 @@ export default function LeadDetailDialog({
                     key={index}
                     className="rounded-lg overflow-hidden h-32 bg-linear-to-br from-gray-200 to-gray-300 flex items-center justify-center"
                   >
-                    <div className="text-gray-500 text-sm">Photo {index}</div>
+                    <div className="text-gray-500 text-sm">
+                      {index <= documentsCount
+                        ? `Document ${index}`
+                        : `Photo ${index}`}
+                    </div>
                   </div>
                 ))}
               </div>
