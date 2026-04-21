@@ -28,42 +28,53 @@ import PlantHighlightCards from "@/components/dashboard/plant-highlight-cards";
 import CustomerActivitiesApprovals from "@/components/dashboard/customer-activities-approvals";
 import TotalInvoicesGenerated from "@/components/dashboard/total-invoices-generated";
 import PlantSalesChart from "@/components/dashboard/plant-sales-chart";
+import { useLeadStatsQuery } from "@/modules/dashboard/dashboard.hooks";
 
 type Period = "Today" | "Week" | "Month";
 
+type StatCardSkeletonProps = {
+  color: string;
+};
+
+function StatCardSkeleton({ color }: StatCardSkeletonProps) {
+  return (
+    <div
+      className={`sm:p-5 px-3 py-5 rounded-md border-none ${color} animate-pulse`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="space-y-2 w-full">
+          <div className="h-3 w-24 rounded bg-white/35" />
+          <div className="h-6 w-20 rounded bg-white/45" />
+        </div>
+
+        <div className="bg-white/65 sm:p-2 p-1 rounded-md">
+          <div className="size-7 rounded bg-white/80" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [period, setPeriod] = useState<Period>("Month");
+  const { data: leadStatsResponse, isLoading: isLeadStatsLoading } =
+    useLeadStatsQuery();
 
-  const statsByPeriod: Record<
-    Period,
-    {
-      totalLeads: string;
-      confirmedLeads: string;
-      pipelineValue: string;
-      monthlyRevenue: string;
-    }
-  > = {
-    Today: {
-      totalLeads: "12",
-      confirmedLeads: "5",
-      pipelineValue: "$1,500",
-      monthlyRevenue: "$3,200",
-    },
-    Week: {
-      totalLeads: "89",
-      confirmedLeads: "28",
-      pipelineValue: "$23,000",
-      monthlyRevenue: "$75,000",
-    },
-    Month: {
-      totalLeads: "247",
-      confirmedLeads: "89",
-      pipelineValue: "$63,500",
-      monthlyRevenue: "$221,000",
-    },
+  const leadStats = leadStatsResponse?.data;
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(amount);
+
+  const stats = {
+    totalLeads: String(leadStats?.totalLeads ?? 0),
+    confirmedLeads: String(leadStats?.confirmedLeads ?? 0),
+    pipelineValue: formatCurrency(leadStats?.pipelineValue ?? 0),
+    monthlyRevenue: formatCurrency(leadStats?.monthlyRevenue ?? 0),
   };
-
-  const currentStats = statsByPeriod[period];
 
   return (
     <div className="">
@@ -82,43 +93,61 @@ export default function Dashboard() {
 
         {/* Metrics Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
-            // Total Leads (Todays | in a Week | in a month)
-            title={`${period} Total Leads`}
-            value={currentStats.totalLeads}
-            icon={<img src={LeadsIcon} alt="leads" className="size-7" />}
-            color="bg-blue-500"
-            navigateTo="/leads"
-          />
+          {isLeadStatsLoading ? (
+            <>
+              {[
+                "bg-blue-500",
+                "bg-green-500",
+                "bg-yellow-500",
+                "bg-orange-500",
+              ].map((color, index) => (
+                <StatCardSkeleton key={index} color={color} />
+              ))}
+            </>
+          ) : (
+            <>
+              <StatCard
+                // Time-period filter is temporarily disabled for stats; keeping monthly only.
+                // title={`${period} Total Leads`}
+                title="Monthly Total Leads"
+                value={stats.totalLeads}
+                icon={<img src={LeadsIcon} alt="leads" className="size-7" />}
+                color="bg-blue-500"
+                navigateTo="/leads"
+              />
 
-          <StatCard
-            // Confirmed Leads (Todays | in a Week | in a month)
-            title={`${period} Confirmed Leads`}
-            value={currentStats.confirmedLeads}
-            icon={
-              <img src={ConfirmedIcon} alt="confirmed" className="size-7" />
-            }
-            color="bg-green-500"
-            navigateTo="/leads"
-          />
+              <StatCard
+                // title={`${period} Confirmed Leads`}
+                title="Monthly Confirmed Leads"
+                value={stats.confirmedLeads}
+                icon={
+                  <img src={ConfirmedIcon} alt="confirmed" className="size-7" />
+                }
+                color="bg-green-500"
+                navigateTo="/leads"
+              />
 
-          <StatCard
-            // Pipeline Value (Todays | in a Week | in a month)
-            title={`${period} Pipeline Value`}
-            value={currentStats.pipelineValue}
-            icon={<img src={ValueIcon} alt="value" className="size-7" />}
-            color="bg-yellow-500"
-            navigateTo="/analytics"
-          />
+              <StatCard
+                // title={`${period} Pipeline Value`}
+                title="Monthly Pipeline Value"
+                value={stats.pipelineValue}
+                icon={<img src={ValueIcon} alt="value" className="size-7" />}
+                color="bg-yellow-500"
+                navigateTo="/analytics"
+              />
 
-          <StatCard
-            // (Today's | This Week | Monthly) Revenue
-            title={`${period} Revenue`}
-            value={currentStats.monthlyRevenue}
-            icon={<img src={RevenueIcon} alt="revenue" className="size-7" />}
-            color="bg-orange-500"
-            navigateTo="/analytics"
-          />
+              <StatCard
+                // title={`${period} Revenue`}
+                title="Monthly Revenue"
+                value={stats.monthlyRevenue}
+                icon={
+                  <img src={RevenueIcon} alt="revenue" className="size-7" />
+                }
+                color="bg-orange-500"
+                navigateTo="/analytics"
+              />
+            </>
+          )}
         </div>
 
         {/* Chart Row 1 */}
