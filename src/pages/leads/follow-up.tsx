@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import StatCard from "@/components/ui/stat-card";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,9 +16,39 @@ import LeadCommunicationTimeline from "@/components/leads/lead-communication-tim
 import AiScriptGenerator from "@/components/follow-up/ai-script-generator";
 import LeadScoring from "@/components/follow-up/lead-scoring";
 import FollowUpKpis from "@/components/follow-up/follow-up-kpis";
+import { apiClient } from "@/modules/auth/auth.api";
+
+type FollowUpStatsData = {
+  total: number;
+  upcoming: number;
+  completed: number;
+  overdue: number;
+};
+
+type FollowUpStatsResponse = {
+  success: boolean;
+  message: string;
+  data: FollowUpStatsData;
+};
+
+async function getFollowUpStatsProvider() {
+  const response = await apiClient.get<FollowUpStatsResponse>(
+    "/api/admin/followups/stats",
+  );
+
+  return response.data;
+}
 
 export default function FollowUpPage() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const { data: followUpStatsResponse, isLoading: isFollowUpStatsLoading } =
+    useQuery({
+      queryKey: ["followups", "admin", "stats"],
+      queryFn: getFollowUpStatsProvider,
+      staleTime: 60 * 1000,
+    });
+
+  const followUpStats = followUpStatsResponse?.data;
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-5">
@@ -44,27 +75,31 @@ export default function FollowUpPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Total Follow-ups"
-          value="8"
+          value={String(followUpStats?.total ?? 0)}
           icon={<CalendarIcon className="w-6 h-6 text-blue-600" />}
           color="bg-blue-600"
+          loading={isFollowUpStatsLoading}
         />
         <StatCard
           title="Upcoming"
-          value="4"
+          value={String(followUpStats?.upcoming ?? 0)}
           icon={<Clock className="w-6 h-6 text-green-600" />}
           color="bg-green-600"
+          loading={isFollowUpStatsLoading}
         />
         <StatCard
           title="Completed"
-          value="2"
+          value={String(followUpStats?.completed ?? 0)}
           icon={<CheckCircle2 className="w-6 h-6 text-green-600" />}
           color="bg-green-600"
+          loading={isFollowUpStatsLoading}
         />
         <StatCard
           title="Overdue"
-          value="2"
+          value={String(followUpStats?.overdue ?? 0)}
           icon={<AlertCircle className="w-6 h-6 text-red-600" />}
           color="bg-red-600"
+          loading={isFollowUpStatsLoading}
         />
       </div>
 
