@@ -1,16 +1,7 @@
 import { useState, useMemo, useCallback } from "react";
-import {
-  Search,
-  Eye,
-  Users,
-  UserCheck,
-  UserPlus,
-  RefreshCw,
-} from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { Search, Users, UserCheck, UserPlus, RefreshCw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import StatCard from "@/components/ui/stat-card";
 import {
   Select,
@@ -22,61 +13,45 @@ import {
 import { useNavigate } from "react-router";
 import AddCustomerDialog from "@/components/customers/add-customer-dialog";
 import FilterTabs, { type Period } from "@/components/FilterTabs";
+import { useCustomersQuery } from "@/modules/customers/customers.hooks";
+import type { AdminCustomer } from "@/modules/customers/customers.api";
+import CustomersTable, {
+  type CustomerListItem,
+} from "@/components/customers/customers-table";
 
-type Customer = {
-  id: string;
-  customerName: string;
-  phone?: string;
-  email?: string;
-  inquiryFor?: string;
-  status?: string;
+type Customer = CustomerListItem & {
   createdAt: Date;
   isReturning?: boolean;
 };
 
-// Helper: generate a random customer
-function generateRandomCustomer(): Customer {
-  const names = [
-    "Luca Moretti",
-    "Maria Rossi",
-    "Giovanni Bianchi",
-    "Elena Ferri",
-    "Marco Conti",
-    "Sofia Romano",
-    "Paolo Greco",
-  ];
-  const inquiries = ["Garage", "Roof", "Extension", "Kitchen", "Bathroom"];
-  const statuses = ["Active", "inactive"];
+function mapApiCustomerToCustomer(apiCustomer: AdminCustomer): Customer {
+  const fullName =
+    `${apiCustomer.firstName ?? ""} ${apiCustomer.lastName ?? ""}`.trim();
 
-  const name = names[Math.floor(Math.random() * names.length)];
-  const id = `ID-${new Date().getFullYear()}-${
-    Math.floor(Math.random() * 9000) + 1000
-  }`;
-  const phone = `+39 0${Math.floor(2000 + Math.random() * 8000)} ${Math.floor(
-    100 + Math.random() * 900
-  )} ${Math.floor(1000 + Math.random() * 9000)}`;
-  const email = `${name.toLowerCase().replace(/\s+/g, ".")}${Math.floor(
-    Math.random() * 100
-  )}@example.com`;
-  const inquiryFor = inquiries[Math.floor(Math.random() * inquiries.length)];
-  const status = statuses[Math.floor(Math.random() * statuses.length)];
-
-  // Random date within the last 30 days
-  const daysAgo = Math.floor(Math.random() * 30);
-  const createdAt = new Date();
-  createdAt.setDate(createdAt.getDate() - daysAgo);
-
-  const isReturning = Math.random() > 0.7; // 30% chance of being returning
+  const phoneNumber = apiCustomer.phone?.number;
+  const phoneCountryCode = apiCustomer.phone?.countryCode;
 
   return {
-    id,
-    customerName: name,
-    phone,
-    email,
-    inquiryFor,
-    status,
-    createdAt,
-    isReturning,
+    id: apiCustomer._id,
+    customerId: apiCustomer.customerId,
+    customerName: fullName,
+    phone:
+      phoneNumber && phoneCountryCode
+        ? `${phoneCountryCode} ${phoneNumber}`
+        : (phoneNumber ?? ""),
+    email: apiCustomer.email ?? "",
+    // Keep columns blank when the API omits a value instead of inventing placeholder data.
+    inquiryFor: apiCustomer.inquiryFor ?? "",
+    status:
+      typeof apiCustomer.isActive === "boolean"
+        ? apiCustomer.isActive
+          ? "Active"
+          : "Inactive"
+        : "",
+    createdAt: apiCustomer.createdAt
+      ? new Date(apiCustomer.createdAt)
+      : new Date(0),
+    isReturning: apiCustomer.isReturning,
   };
 }
 
@@ -84,14 +59,23 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [period, setPeriod] = useState<Period>("Month");
-  // Seed state with a few random customers plus the initial seeds
-  const [customers] = useState<Customer[]>(() => {
-    const customers = Array.from({ length: 8 }).map(() =>
-      generateRandomCustomer()
-    );
-    return customers;
-  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const {
+    data: customersResponse,
+    isLoading: isCustomersLoading,
+    isError: isCustomersError,
+    isFetching: isCustomersFetching,
+  } = useCustomersQuery(currentPage, rowsPerPage);
   const navigate = useNavigate();
+
+  const customers = useMemo(() => {
+    return (customersResponse?.data.customers ?? []).map(
+      mapApiCustomerToCustomer,
+    );
+  }, [customersResponse]);
+
+  const totalItems = customersResponse?.data.total ?? 0;
 
   // Helper to check if a date matches the selected period
   const isInPeriod = useCallback(
@@ -101,7 +85,7 @@ export default function CustomersPage() {
       const customerDate = new Date(
         date.getFullYear(),
         date.getMonth(),
-        date.getDate()
+        date.getDate(),
       );
 
       if (period === "Today") {
@@ -117,7 +101,7 @@ export default function CustomersPage() {
       }
       return true;
     },
-    [period]
+    [period],
   );
 
   // Calculate period-filtered stats
@@ -128,13 +112,13 @@ export default function CustomersPage() {
   const stats = useMemo(() => {
     const total = periodFilteredCustomers.length;
     const active = periodFilteredCustomers.filter(
-      (c) => c.status?.toLowerCase() === "active"
+      (c) => c.status.toLowerCase() === "active",
     ).length;
     const newCustomers = periodFilteredCustomers.filter(
-      (c) => !c.isReturning
+      (c) => c.isReturning === false,
     ).length;
     const returning = periodFilteredCustomers.filter(
-      (c) => c.isReturning
+      (c) => c.isReturning === true,
     ).length;
 
     return { total, active, newCustomers, returning };
@@ -144,7 +128,7 @@ export default function CustomersPage() {
     const q = searchQuery.trim().toLowerCase();
     return customers.filter((c) => {
       // Status filter
-      if (statusFilter !== "all" && c.status?.toLowerCase() !== statusFilter) {
+      if (statusFilter !== "all" && c.status.toLowerCase() !== statusFilter) {
         return false;
       }
 
@@ -152,14 +136,19 @@ export default function CustomersPage() {
       if (!q) return true;
 
       return (
-        (c.id && c.id.toLowerCase().includes(q)) ||
-        (c.customerName && c.customerName.toLowerCase().includes(q)) ||
-        (c.phone && c.phone.toLowerCase().includes(q)) ||
-        (c.email && c.email.toLowerCase().includes(q)) ||
-        (c.inquiryFor && c.inquiryFor.toLowerCase().includes(q))
+        (c.customerId && c.customerId.toLowerCase().includes(q)) ||
+        c.customerName.toLowerCase().includes(q) ||
+        c.phone.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        c.inquiryFor.toLowerCase().includes(q)
       );
     });
   }, [customers, searchQuery, statusFilter]);
+
+  const handleRowsPerPageChange = (nextRowsPerPage: number) => {
+    setRowsPerPage(nextRowsPerPage);
+    setCurrentPage(1);
+  };
 
   return (
     <>
@@ -256,86 +245,17 @@ export default function CustomersPage() {
         </div>
 
         {/* Table */}
-        <Card className="p-0">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer ID
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Customer Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Phone No.
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Email
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Inquiry For
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredCustomers.map((customer, index) => (
-                    <tr
-                      key={`${customer.id}-${index}`}
-                      className="hover:bg-gray-50"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {customer.id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {customer.customerName}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {customer.phone}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {customer.email}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {customer.inquiryFor}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Badge
-                          variant="outline"
-                          className={
-                            customer.status &&
-                            customer.status.toLowerCase() === "active"
-                              ? "bg-green-50 text-green-700 border-green-200"
-                              : "bg-red-50 text-red-700 border-red-200"
-                          }
-                        >
-                          {customer.status}
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-blue-600 hover:text-blue-800"
-                          onClick={() => navigate(`/customers/${customer.id}`)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <CustomersTable
+          customers={filteredCustomers}
+          isLoading={isCustomersLoading || isCustomersFetching}
+          isError={isCustomersError}
+          totalItems={totalItems}
+          currentPage={currentPage}
+          rowsPerPage={rowsPerPage}
+          onPageChange={setCurrentPage}
+          onRowsPerPageChange={handleRowsPerPageChange}
+          onViewCustomer={(customerId) => navigate(`/customers/${customerId}`)}
+        />
       </div>
     </>
   );
