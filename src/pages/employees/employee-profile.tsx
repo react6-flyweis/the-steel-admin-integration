@@ -1,11 +1,19 @@
 import { useState } from "react";
-import { AddEmployeeDialog } from "@/components/employees/add-employee-dialog";
 import { useParams, Link } from "react-router";
+import { AddEmployeeDialog } from "@/components/employees/add-employee-dialog";
 import StatCard from "@/components/ui/stat-card";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 // Tabs: using original nav-style tabs (no shadcn Tabs)
 import {
   Mail,
@@ -19,31 +27,8 @@ import {
   ArrowLeft,
   Edit,
 } from "lucide-react";
-
-type Employee = {
-  id: string;
-  name: string;
-  email: string;
-  phone: string;
-  joinedDate: string;
-  role: string;
-  team?: string;
-  status?: string;
-  leads?: number;
-};
-
-const mockEmployees: Employee[] = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    email: "sarah.johnson@company.com",
-    phone: "+1 (555) 123-4567",
-    joinedDate: "January 15, 2023",
-    role: "Manager - Sales",
-    status: "Active",
-    leads: 45,
-  },
-];
+import { type AdminEmployeeProfileLead } from "@/modules/employees/employees.api";
+import { useAdminEmployeeProfileQuery } from "@/modules/employees/employees.hooks";
 
 type Lead = {
   id: string;
@@ -57,49 +42,121 @@ type Lead = {
   date?: string;
 };
 
-const mockAssignedLeads: Lead[] = [
-  {
-    id: "l1",
-    name: "John Doe",
-    code: "Q-2025-1047",
-    email: "john.doe@gmail.com",
-    phone: "(555) 123-4567",
-    location: "Workshop · Texas",
-    priority: "Hot",
-    stage: "Proposal",
-    date: "January 15, 2024",
-  },
-  {
-    id: "l2",
-    name: "John Doe",
-    code: "Q-2025-1047",
-    email: "john.doe@gmail.com",
-    phone: "(555) 123-4567",
-    location: "Workshop · Texas",
-    priority: "Hot",
-    stage: "Proposal",
-    date: "January 15, 2024",
-  },
-  {
-    id: "l3",
-    name: "John Doe",
-    code: "Q-2025-1047",
-    email: "john.doe@gmail.com",
-    phone: "(555) 123-4567",
-    location: "Workshop · Texas",
-    priority: "Hot",
-    stage: "Proposal",
-    date: "January 15, 2024",
-  },
-];
+const formatJoinedDate = (date?: string) => {
+  if (!date) return "N/A";
+
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) return "N/A";
+
+  return parsedDate.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const formatCurrency = (amount?: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(amount ?? 0);
+
+const formatLeadPhone = (phone?: { number?: string; countryCode?: string }) => {
+  if (!phone?.number && !phone?.countryCode) {
+    return "N/A";
+  }
+
+  return `${phone.countryCode ?? ""} ${phone.number ?? ""}`.trim();
+};
+
+const formatLifecycleStatus = (status?: string) => {
+  if (!status) return "Not set";
+
+  return status
+    .split("_")
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(" ");
+};
+
+const formatRole = (role?: string) => {
+  switch (role?.toLowerCase()) {
+    case "account":
+      return "Account";
+    case "admin":
+      return "Admin";
+    case "sales":
+      return "Sales";
+    default:
+      return role ? role.charAt(0).toUpperCase() + role.slice(1) : "N/A";
+  }
+};
+
+const mapLead = (lead: AdminEmployeeProfileLead): Lead => ({
+  id: lead._id,
+  name: lead.customerId?.firstName ?? lead.name ?? "Unknown Lead",
+  code: lead.customerId?.customerId ?? lead.code ?? lead._id,
+  email: lead.customerId?.email ?? lead.email,
+  phone: formatLeadPhone(lead.customerId?.phone) || lead.phone || "N/A",
+  location:
+    [lead.buildingType, lead.location || lead.source]
+      .filter(Boolean)
+      .join(" · ") ||
+    lead.location ||
+    lead.source ||
+    "N/A",
+  priority:
+    lead.quoteValue !== undefined
+      ? formatCurrency(lead.quoteValue)
+      : (lead.priority ?? "N/A"),
+  stage: formatLifecycleStatus(lead.lifecycleStatus ?? lead.stage),
+  date: formatJoinedDate(lead.createdAt),
+});
 
 export default function EmployeeProfilePage() {
   const { id } = useParams();
-  const employee =
-    mockEmployees.find((e) => e.id === String(id)) || mockEmployees[0];
+  const employeeId = id ?? "";
+
+  const {
+    data: employeeProfileResponse,
+    isLoading,
+    error,
+  } = useAdminEmployeeProfileQuery(employeeId);
+
+  const profile = employeeProfileResponse?.data;
+  const employee = profile?.employee;
+  const assignedLeads = (profile?.leads ?? []).map(mapLead);
+  const employeeStats = profile?.stats;
 
   const [activeTab, setActiveTab] = useState<string>("personal");
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  if (isLoading) {
+    return (
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+        <Card className="p-6">Loading employee profile...</Card>
+      </div>
+    );
+  }
+
+  if (error || !employee) {
+    return (
+      <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <Button asChild size="sm">
+            <Link to="/employees" className="inline-flex items-center gap-2">
+              <ArrowLeft />
+              Back
+            </Link>
+          </Button>
+          <h2 className="text-lg sm:text-xl font-semibold">Employee Profile</h2>
+        </div>
+        <Card className="p-6 text-sm text-gray-600">
+          Employee details are unavailable.
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-7xl mx-auto">
@@ -120,7 +177,7 @@ export default function EmployeeProfilePage() {
             <AvatarFallback>
               {employee.name
                 .split(" ")
-                .map((n) => n[0])
+                .map((n: string) => n[0])
                 .slice(0, 2)
                 .join("")}
             </AvatarFallback>
@@ -129,18 +186,22 @@ export default function EmployeeProfilePage() {
             <h3 className="text-xl sm:text-2xl font-bold truncate">
               {employee.name}
             </h3>
-            <div className="text-sm text-gray-600 mt-1">{employee.role}</div>
+            <div className="text-sm text-gray-600 mt-1">
+              {formatRole(employee.role)}
+            </div>
             <div className="text-sm text-gray-400 mt-1">
-              Joined {employee.joinedDate}
+              Joined {formatJoinedDate(employee.createdAt)}
             </div>
           </div>
         </div>
         <div className="text-right mt-4 sm:mt-0">
           <div className="inline-flex flex-col items-end gap-2">
-            <Badge variant="secondary">{employee.status}</Badge>
+            <Badge variant="secondary">
+              {employee.isActive ? "Active" : "Inactive"}
+            </Badge>
             <div className="text-sm text-gray-600">
               <span className="text-2xl sm:text-3xl font-semibold text-gray-900 mr-1">
-                {employee.leads}
+                {employeeStats?.totalLeads ?? assignedLeads.length}
               </span>
               <span className="text-sm text-gray-600">leads assigned</span>
             </div>
@@ -207,7 +268,9 @@ export default function EmployeeProfilePage() {
                     </div>
                     <div>
                       <div className="text-gray-500 text-xs">Phone</div>
-                      <div className="mt-1 text-gray-900">{employee.phone}</div>
+                      <div className="mt-1 text-gray-900">
+                        {employee.phone ?? "N/A"}
+                      </div>
                     </div>
                   </div>
 
@@ -218,7 +281,7 @@ export default function EmployeeProfilePage() {
                     <div>
                       <div className="text-gray-500 text-xs">Join Date</div>
                       <div className="mt-1 text-gray-900">
-                        {employee.joinedDate}
+                        {formatJoinedDate(employee.createdAt)}
                       </div>
                     </div>
                   </div>
@@ -239,7 +302,7 @@ export default function EmployeeProfilePage() {
                     <div className="text-gray-500 text-xs">Role</div>
                     <div className="mt-1">
                       <span className="inline-block px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-sm">
-                        {employee.role}
+                        {formatRole(employee.role)}
                       </span>
                     </div>
                   </div>
@@ -270,49 +333,92 @@ export default function EmployeeProfilePage() {
           )}
 
           {activeTab === "assigned" && (
-            <div className="space-y-4 bg-white rounded-lg shadow-sm px-4 sm:px-6 py-5 overflow-x-auto">
-              {mockAssignedLeads.map((lead) => (
-                <div
-                  key={lead.id}
-                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-3 rounded-md"
-                >
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full">
-                    <div className="w-full sm:min-w-40">
-                      <div className="font-medium text-sm truncate">
-                        {lead.name}
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {lead.code}
-                      </div>
-                    </div>
+            <div className="bg-white rounded-lg shadow-sm overflow-hidden border border-gray-200">
+              <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+                <h4 className="font-semibold text-gray-900">Assigned Leads</h4>
+                <p className="text-sm text-gray-500 mt-1">
+                  Leads currently associated with this employee.
+                </p>
+              </div>
 
-                    <div className="w-full flex-1 text-sm text-gray-700 truncate">
-                      {lead.email}
-                    </div>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gray-50">
+                      <TableHead className="text-xs text-gray-500 uppercase tracking-wider">
+                        Lead
+                      </TableHead>
+                      <TableHead className="text-xs text-gray-500 uppercase tracking-wider">
+                        Customer
+                      </TableHead>
+                      <TableHead className="text-xs text-gray-500 uppercase tracking-wider">
+                        Contact
+                      </TableHead>
+                      <TableHead className="text-xs text-gray-500 uppercase tracking-wider">
+                        Quote Value
+                      </TableHead>
+                      <TableHead className="text-xs text-gray-500 uppercase tracking-wider">
+                        Stage
+                      </TableHead>
+                      <TableHead className="text-xs text-gray-500 uppercase tracking-wider">
+                        Date
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {assignedLeads.map((lead: Lead) => (
+                      <TableRow key={lead.id} className="hover:bg-gray-50">
+                        <TableCell>
+                          <div>
+                            <div className="font-medium text-gray-900 truncate">
+                              {lead.name}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">
+                              {lead.code}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm text-gray-700">
+                            {lead.location}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="space-y-1">
+                            <p className="text-sm text-gray-700 truncate">
+                              {lead.email ?? "N/A"}
+                            </p>
+                            <p className="text-sm text-gray-500 truncate">
+                              {lead.phone ?? "N/A"}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className="rounded-full bg-blue-100 text-blue-700 px-3 py-1 text-sm font-medium">
+                            {lead.priority ?? "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge className="rounded-full bg-yellow-100 text-yellow-700 px-3 py-1 text-sm font-medium">
+                            {lead.stage ?? "N/A"}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm font-medium text-gray-700">
+                            {lead.date}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
 
-                    <div className="w-full sm:min-w-[120px] text-sm text-gray-700">
-                      {lead.phone}
-                    </div>
-
-                    <div className="w-full sm:min-w-[160px] text-sm text-gray-500 truncate">
-                      {lead.location}
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-sm">
-                        {lead.priority}
-                      </span>
-                      <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 text-sm">
-                        {lead.stage}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="sm:ml-6 text-sm font-semibold text-gray-800 mt-2 sm:mt-0">
-                    {lead.date}
-                  </div>
+              {assignedLeads.length === 0 && (
+                <div className="py-8 text-center text-sm text-gray-500 border-t border-gray-200">
+                  No assigned leads found for this employee.
                 </div>
-              ))}
+              )}
             </div>
           )}
 
@@ -320,29 +426,45 @@ export default function EmployeeProfilePage() {
             <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 <StatCard
-                  title="Leads Closed"
-                  value={<span className="font-semibold">32</span>}
+                  title="Total Leads"
+                  value={
+                    <span className="font-semibold">
+                      {employeeStats?.totalLeads ?? 0}
+                    </span>
+                  }
                   color="bg-blue-600"
                   icon={<Users className="h-5 w-5 text-blue-600" />}
                 />
 
                 <StatCard
-                  title="Conversion Rate"
-                  value={<span className="font-semibold">71%</span>}
+                  title="Leads Closed"
+                  value={
+                    <span className="font-semibold">
+                      {employeeStats?.closedLeads ?? 0}
+                    </span>
+                  }
                   color="bg-yellow-400"
-                  icon={<Percent className="h-5 w-5 text-yellow-400" />}
+                  icon={<CheckSquare className="h-5 w-5 text-yellow-400" />}
+                />
+
+                <StatCard
+                  title="Conversion Rate"
+                  value={
+                    <span className="font-semibold">
+                      {employeeStats?.conversionRate ?? 0}%
+                    </span>
+                  }
+                  color="bg-green-500"
+                  icon={<Percent className="h-5 w-5 text-green-500" />}
                 />
 
                 <StatCard
                   title="Follow-ups Completed"
-                  value={<span className="font-semibold">89%</span>}
-                  color="bg-green-500"
-                  icon={<CheckSquare className="h-5 w-5 text-green-500" />}
-                />
-
-                <StatCard
-                  title="Customer Satisfaction"
-                  value={<span className="font-semibold">4.8/5</span>}
+                  value={
+                    <span className="font-semibold">
+                      {employeeStats?.followUpsCompleted ?? 0}
+                    </span>
+                  }
                   color="bg-orange-400"
                   icon={<Smile className="h-5 w-5 text-orange-400" />}
                 />
@@ -351,8 +473,10 @@ export default function EmployeeProfilePage() {
                   title="Revenue Generated"
                   value={
                     <div>
-                      <div className="text-2xl font-semibold">$125,000</div>
-                      <div className="text-xs opacity-80">This Year</div>
+                      <div className="text-2xl font-semibold">
+                        {formatCurrency(employeeStats?.revenueGenerated)}
+                      </div>
+                      <div className="text-xs opacity-80">Total</div>
                     </div>
                   }
                   color="bg-rose-400"
@@ -371,12 +495,16 @@ export default function EmployeeProfilePage() {
           name: employee.name,
           email: employee.email,
           phone: employee.phone,
-          role: employee.role.split(" - ")[0] || employee.role,
-          team: employee.team ?? "Sales",
-          status:
-            employee.status && employee.status.toLowerCase() === "active"
-              ? "active"
-              : "inactive",
+          role:
+            employee.role?.toLowerCase() === "account"
+              ? "Manager"
+              : employee.role?.toLowerCase() === "sales"
+                ? "Employee"
+                : employee.role?.toLowerCase() === "admin"
+                  ? "Admin"
+                  : (employee.role ?? "Employee"),
+          team: "Sales",
+          status: employee.isActive ? "active" : "inactive",
           password: "",
         }}
       />
