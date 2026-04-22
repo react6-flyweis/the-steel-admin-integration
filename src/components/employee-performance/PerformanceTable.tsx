@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 
 type Employee = {
+  id: string;
   name: string;
   value: number;
   color: string;
@@ -32,21 +33,13 @@ interface Props {
   data: Employee[];
 }
 
-function formatCurrency(n: number) {
-  return n.toLocaleString(undefined, {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
-}
-
 export default function PerformanceTable({ data }: Props) {
   const [searchQuery, setSearchQuery] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
 
   const departments = useMemo(
     () => ["all", ...Array.from(new Set(data.map((d) => d.department)))],
-    [data]
+    [data],
   );
 
   const filtered = useMemo(() => {
@@ -104,7 +97,7 @@ export default function PerformanceTable({ data }: Props) {
             </TableHeader>
             <TableBody>
               {filtered.map((d) => (
-                <TableRow key={d.name}>
+                <TableRow key={d.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <div
@@ -132,14 +125,14 @@ export default function PerformanceTable({ data }: Props) {
                           d.department === "Sales"
                             ? "#EDF8FF"
                             : d.department === "Business Development"
-                            ? "#F3F0FF"
-                            : "#F0F9F4",
+                              ? "#F3F0FF"
+                              : "#F0F9F4",
                         color:
                           d.department === "Sales"
                             ? "#0369A1"
                             : d.department === "Business Development"
-                            ? "#3730A3"
-                            : "#065F46",
+                              ? "#3730A3"
+                              : "#065F46",
                       }}
                     >
                       {d.department}
@@ -160,9 +153,7 @@ export default function PerformanceTable({ data }: Props) {
                     </div>
                   </TableCell>
 
-                  <TableCell className="font-semibold">
-                    {formatCurrency(d.value)}
-                  </TableCell>
+                  <TableCell className="font-semibold">{d.value}</TableCell>
 
                   <TableCell>{d.commission}</TableCell>
 
@@ -177,7 +168,9 @@ export default function PerformanceTable({ data }: Props) {
                           }}
                         />
                       </div>
-                      <div className="text-xs text-gray-500 w-8">{d.perf}%</div>
+                      <div className="text-xs text-gray-500 w-10">
+                        {d.perf}%
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -207,9 +200,7 @@ export default function PerformanceTable({ data }: Props) {
                     <div className="text-xs text-gray-400">{d.role}</div>
                   </div>
                 </div>
-                <div className="text-sm font-semibold">
-                  {formatCurrency(d.value)}
-                </div>
+                <div className="text-sm font-semibold">{d.value}</div>
               </div>
 
               <div className="mt-2 text-xs text-gray-500 grid grid-cols-3 gap-2">
@@ -241,7 +232,7 @@ export default function PerformanceTable({ data }: Props) {
                     className="h-3 rounded-full"
                   />
                 </div>
-                <div className="text-xs text-gray-500 w-8">{d.perf}%</div>
+                <div className="text-xs text-gray-500 w-10">{d.perf}%</div>
               </div>
             </Card>
           ))}
