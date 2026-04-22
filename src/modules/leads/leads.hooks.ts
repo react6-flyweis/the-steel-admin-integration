@@ -43,7 +43,7 @@ type EscalationsResponse = {
   };
 };
 
-async function getEscalationsProvider() {
+async function getEscalationsProvider(): Promise<EscalationsResponse> {
   const response = await apiClient.get<EscalationsResponse>(
     "/api/admin/escalations",
   );
