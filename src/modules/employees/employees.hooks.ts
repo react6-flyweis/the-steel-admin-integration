@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getAdminEmployeesProvider,
+  getAdminEmployeeProfileProvider,
   getEmployeeStatsProvider,
 } from "./employees.api";
 
@@ -17,5 +18,14 @@ export function useEmployeeStatsQuery() {
     queryKey: ["employees", "admin", "stats"],
     queryFn: getEmployeeStatsProvider,
     staleTime: 60 * 1000,
+  });
+}
+
+export function useAdminEmployeeProfileQuery(employeeId: string) {
+  return useQuery({
+    queryKey: ["employees", "admin", "detail", employeeId],
+    queryFn: () => getAdminEmployeeProfileProvider(employeeId),
+    staleTime: 60 * 1000,
+    enabled: Boolean(employeeId),
   });
 }
