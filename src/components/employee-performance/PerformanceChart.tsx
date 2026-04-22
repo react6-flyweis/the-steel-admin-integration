@@ -1,5 +1,5 @@
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from "recharts";
-import { formatCurrency, type PerformanceDatum } from "./TopPerformerCard";
+import { type PerformanceDatum } from "./TopPerformerCard";
 
 export default function PerformanceChart({
   data,
@@ -26,7 +26,7 @@ export default function PerformanceChart({
               <Cell key={entry.name} fill={entry.color} />
             ))}
           </Pie>
-          <Tooltip formatter={(value: number) => formatCurrency(value)} />
+          <Tooltip formatter={(value: number) => `$${value}`} />
         </PieChart>
       </ResponsiveContainer>
     </div>
