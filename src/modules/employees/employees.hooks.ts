@@ -3,6 +3,7 @@ import {
   getAdminEmployeesProvider,
   getAdminEmployeeProfileProvider,
   getEmployeeStatsProvider,
+  getEmployeePerformanceProvider,
 } from "./employees.api";
 
 export function useAdminEmployeesQuery() {
@@ -17,6 +18,14 @@ export function useEmployeeStatsQuery() {
   return useQuery({
     queryKey: ["employees", "admin", "stats"],
     queryFn: getEmployeeStatsProvider,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useEmployeePerformanceQuery() {
+  return useQuery({
+    queryKey: ["employees", "admin", "performance"],
+    queryFn: getEmployeePerformanceProvider,
     staleTime: 60 * 1000,
   });
 }
