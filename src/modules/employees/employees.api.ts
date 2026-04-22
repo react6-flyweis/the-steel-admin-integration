@@ -71,6 +71,50 @@ export type AdminEmployeeProfileResponse = {
   };
 };
 
+export type EmployeeByRole = {
+  _id: string;
+  count: number;
+};
+
+export type EmployeeTopPerformer = {
+  name?: string;
+  leadsCount?: number;
+} | null;
+
+export type EmployeeStatsData = {
+  total: number;
+  active: number;
+  byRole: EmployeeByRole[];
+  topPerformer: EmployeeTopPerformer;
+};
+
+export type EmployeeStatsResponse = {
+  success: boolean;
+  message: string;
+  data: EmployeeStatsData;
+};
+
+export type EmployeePerformanceApiItem = {
+  employee: {
+    _id: string;
+    name: string;
+    email: string;
+  };
+  totalLeads: number;
+  closedLeads: number;
+  conversionRate: number;
+};
+
+export type EmployeePerformanceData = {
+  performance: EmployeePerformanceApiItem[];
+};
+
+export type EmployeePerformanceResponse = {
+  success: boolean;
+  message: string;
+  data: EmployeePerformanceData;
+};
+
 export async function getAdminEmployeesProvider() {
   const response = await apiClient.get<AdminEmployeesResponse>(
     "/api/admin/employees",
@@ -82,6 +126,22 @@ export async function getAdminEmployeesProvider() {
 export async function getAdminEmployeeProfileProvider(employeeId: string) {
   const response = await apiClient.get<AdminEmployeeProfileResponse>(
     `/api/admin/employees/${encodeURIComponent(employeeId)}`,
+  );
+
+  return response.data;
+}
+
+export async function getEmployeeStatsProvider() {
+  const response = await apiClient.get<EmployeeStatsResponse>(
+    "/api/admin/employees/stats",
+  );
+
+  return response.data;
+}
+
+export async function getEmployeePerformanceProvider() {
+  const response = await apiClient.get<EmployeePerformanceResponse>(
+    "/api/admin/employees/performance",
   );
 
   return response.data;
