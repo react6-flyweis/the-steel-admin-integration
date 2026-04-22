@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { useSearchParams } from "react-router";
 import { EmployeeStatsGrid } from "@/components/employees/employee-stats-grid";
 import {
@@ -6,110 +5,78 @@ import {
   type Employee,
 } from "@/components/employees/employee-table";
 import { AddEmployeeDialog } from "@/components/employees/add-employee-dialog";
+import {
+  useAdminEmployeesQuery,
+  useEmployeeStatsQuery,
+} from "@/modules/employees/employees.hooks";
 
-// Mock data for demonstration
-const initialEmployees: Employee[] = [
-  {
-    id: "1",
-    name: "Sarah Johnson",
-    email: "sarah.johnson@company.com",
-    phone: "+1 (555) 321-4567",
-    joinedDate: "1/10/2023",
-    role: "Manager",
-    team: "Sales",
-    status: "active",
-    leads: 45,
-  },
-  {
-    id: "2",
-    name: "Michael Chen",
-    email: "michael.chen@company.com",
-    phone: "+1 (555) 234-5678",
-    joinedDate: "3/15/2023",
-    role: "Employee",
-    team: "Support",
-    status: "active",
-    leads: 28,
-  },
-  {
-    id: "3",
-    name: "Emily",
-    email: "emily.rodriguez@company.com",
-    phone: "+1 (555) 345-6789",
-    joinedDate: "11/20/2022",
-    role: "Admin",
-    team: "Marketing",
-    status: "active",
-    leads: 52,
-  },
-  {
-    id: "4",
-    name: "David Thompson",
-    email: "david.thompson@company.com",
-    phone: "+1 (555) 456-7890",
-    joinedDate: "5/8/2023",
-    role: "Employee",
-    team: "Construction",
-    status: "active",
-    leads: 33,
-  },
-  {
-    id: "5",
-    name: "Lisa Wang",
-    email: "lisa.wang@company.com",
-    phone: "+1 (555) 567-8901",
-    joinedDate: "2/14/2023",
-    role: "Manager",
-    team: "Plant",
-    status: "active",
-    leads: 39,
-  },
-  {
-    id: "6",
-    name: "James Wilson",
-    email: "james.wilson@company.com",
-    phone: "+1 (555) 678-9012",
-    joinedDate: "7/22/2023",
-    role: "Employee",
-    team: "Sales",
-    status: "inactive",
-    leads: 0,
-  },
-];
+const formatJoinedDate = (date?: string) => {
+  if (!date) {
+    return "N/A";
+  }
+
+  const parsedDate = new Date(date);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "N/A";
+  }
+
+  return parsedDate.toLocaleDateString("en-US");
+};
+
+const mapApiRoleToUiRole = (role?: string): Employee["role"] => {
+  switch (role?.toLowerCase()) {
+    case "admin":
+      return "Admin";
+    case "sales":
+      return "Employee";
+    case "account":
+      return "Manager";
+    default:
+      return "Employee";
+  }
+};
 
 export default function EmployeesPage() {
-  const [employees] = useState<Employee[]>(initialEmployees);
+  const { data: employeesResponse } = useAdminEmployeesQuery();
+  const { data: employeeStatsResponse } = useEmployeeStatsQuery();
 
   const [searchParams] = useSearchParams();
   const teamFilter = searchParams.get("team") ?? undefined;
 
+  const employees: Employee[] = (employeesResponse?.data.employees ?? []).map(
+    (employee) => ({
+      id: employee._id,
+      name: employee.name,
+      email: employee.email,
+      phone: employee.phone ?? "N/A",
+      joinedDate: formatJoinedDate(employee.createdAt),
+      role: mapApiRoleToUiRole(employee.role),
+      team: "N/A",
+      status: employee.isActive ? "active" : "inactive",
+      leads: employee.assignedLeadCount ?? 0,
+    }),
+  );
+
   const filteredEmployees = teamFilter
     ? employees.filter(
-        (emp) => emp.team?.toLowerCase() === teamFilter.toLowerCase()
+        (emp) => emp.team?.toLowerCase() === teamFilter.toLowerCase(),
       )
     : employees;
 
-  const activeEmployees = filteredEmployees.filter(
-    (emp) => emp.status === "active"
-  );
-  const inactiveEmployees = filteredEmployees.filter(
-    (emp) => emp.status === "inactive"
-  );
+  const employeeStatsData = employeeStatsResponse?.data;
 
-  const topPerformer = [...filteredEmployees].sort(
-    (a, b) => b.leads - a.leads
-  )[0];
-
-  const teams = [...new Set(filteredEmployees.map((emp) => emp.team))];
+  const totalEmployees = employeeStatsData?.total ?? 0;
+  const activeEmployees = employeeStatsData?.active ?? 0;
+  const inactiveEmployees = Math.max(totalEmployees - activeEmployees, 0);
 
   const stats = {
-    totalEmployees: filteredEmployees.length,
-    inactiveEmployees: inactiveEmployees.length,
-    activeEmployees: activeEmployees.length,
-    totalTeams: teams.length,
+    totalEmployees,
+    inactiveEmployees,
+    activeEmployees,
+    totalTeams: employeeStatsData?.byRole?.length ?? 0,
     topPerformer: {
-      name: topPerformer?.name || "N/A",
-      leadsCount: topPerformer?.leads || 0,
+      name: employeeStatsData?.topPerformer?.name ?? "N/A",
+      leadsCount: employeeStatsData?.topPerformer?.leadsCount ?? 0,
     },
   };
 
