@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft } from "lucide-react";
 import ClientSelector from "@/components/customers/client-selector";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { useAuthStore } from "@/modules/auth/auth.store";
+import { useCreateMeetingMutation } from "@/modules/meetings/meetings.hooks";
 import SuccessDialog from "@/components/success-dialog";
 
 const meetingSchema = z.object({
@@ -23,18 +26,32 @@ const meetingSchema = z.object({
   title: z.string().min(1, "Please select a meeting title"),
   date: z.string().min(1, "Meeting date is required"),
   time: z.string().min(1, "Meeting time is required"),
-  duration: z.string().min(1, "Duration is required"),
+  duration: z
+    .string()
+    .min(1, "Duration is required")
+    .regex(/^[0-9]+$/, "Duration must be a number of minutes"),
   mode: z.enum(["online", "in-person"]),
-  link: z.string().optional(),
+  link: z.string().min(1, "Meeting link is required"),
   notes: z.string().optional(),
 });
 
 type MeetingFormData = z.infer<typeof meetingSchema>;
 
+type MeetingRouteState = {
+  customerId?: string;
+  leadId?: string;
+  assignedTo?: string;
+};
+
 export default function ScheduleMeeting() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [selectedClient, setSelectedClient] = useState("");
   const [successOpen, setSuccessOpen] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const createMeetingMutation = useCreateMeetingMutation();
+  const authUserId = useAuthStore((state) => state.user?._id ?? "");
+  const routeState = (location.state ?? {}) as MeetingRouteState;
 
   const {
     register,
@@ -58,11 +75,61 @@ export default function ScheduleMeeting() {
 
   // clients list available for the selector
 
-  const onSubmit = (data: MeetingFormData) => {
-    console.log("Meeting scheduled:", data);
-    // Handle form submission here
-    setSuccessOpen(true);
-    setTimeout(() => navigate("/customers/meetings"), 500);
+  const onSubmit = async (data: MeetingFormData) => {
+    setErrorMessage(null);
+
+    const customerId = routeState.customerId ?? selectedClient.trim();
+    const leadId = routeState.leadId?.trim() ?? "";
+    const assignedTo = routeState.assignedTo?.trim() ?? authUserId.trim();
+
+    if (!customerId) {
+      setErrorMessage(
+        "Customer ID is missing. Select a customer before scheduling.",
+      );
+      return;
+    }
+
+    if (!leadId) {
+      setErrorMessage(
+        "leadId is not available on this screen yet. Pass it from the customer or lead context before submitting.",
+      );
+      return;
+    }
+
+    if (!assignedTo) {
+      setErrorMessage(
+        "assignedTo is not available. Select or pass the sales user id before submitting.",
+      );
+      return;
+    }
+
+    const meetingTime = new Date(
+      `${data.date}T${data.time}:00.000Z`,
+    ).toISOString();
+
+    try {
+      const response = await createMeetingMutation.mutateAsync({
+        customerId,
+        leadId,
+        title: data.title,
+        meetingTime,
+        duration: Number.parseInt(data.duration, 10),
+        mode: data.mode,
+        meetingLink: data.link?.trim() ?? "",
+        notes: data.notes?.trim() || undefined,
+        assignedTo,
+      });
+
+      if (!response.success) {
+        setErrorMessage(response.message || "Unable to schedule meeting.");
+        return;
+      }
+
+      setSuccessOpen(true);
+      setTimeout(() => navigate("/customers/meetings"), 500);
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Unable to schedule meeting."));
+    }
   };
 
   return (
@@ -84,6 +151,12 @@ export default function ScheduleMeeting() {
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {errorMessage ? (
+          <p className="rounded-md bg-red-50 px-4 py-3 text-sm text-red-600">
+            {errorMessage}
+          </p>
+        ) : null}
+
         <div className="bg-white rounded-lg p-4 sm:p-6 shadow space-y-5">
           <h3 className="text-base font-semibold text-gray-900">
             Meeting Details
@@ -163,7 +236,10 @@ export default function ScheduleMeeting() {
               <Label htmlFor="duration">Duration</Label>
               <Input
                 id="duration"
-                placeholder="30 min"
+                type="number"
+                min={1}
+                step={1}
+                placeholder="60"
                 {...register("duration")}
               />
               {errors.duration && (
@@ -240,9 +316,12 @@ export default function ScheduleMeeting() {
           </Button>
           <Button
             type="submit"
+            disabled={createMeetingMutation.isPending}
             className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto px-6"
           >
-            Schedule meeting
+            {createMeetingMutation.isPending
+              ? "Scheduling..."
+              : "Schedule meeting"}
           </Button>
         </div>
       </form>
