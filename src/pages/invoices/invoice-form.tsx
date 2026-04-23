@@ -1,5 +1,6 @@
 import { useForm, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { Calendar, Plus, UserPlus } from "lucide-react";
+import { useState } from "react";
 import InvoiceLineItem from "./invoice-line-item";
 import AddProjectDialog from "@/components/add-project-dialog";
 import AddMarkupDialog from "@/components/add-markup-dialog";
@@ -11,6 +12,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import steelLogo from "@/assets/steel-building-depot-logo.png";
 import { useNavigate } from "react-router";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { useCreateInvoiceMutation } from "@/modules/invoices/invoices.hooks";
+import type { CreateInvoicePayload } from "@/modules/invoices/invoices.api";
 
 export interface LineItem {
   id: string;
@@ -49,6 +53,9 @@ export interface InvoiceFormValues {
 }
 
 export default function InvoiceForm() {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const createInvoiceMutation = useCreateInvoiceMutation();
+
   const { register, control, handleSubmit, setValue, getValues } =
     useForm<InvoiceFormValues>({
       defaultValues: {
@@ -142,6 +149,22 @@ export default function InvoiceForm() {
   //   setValue(`lineItems.${index}.images`, newImages);
   // };
 
+  const toNumber = (value: string | number | undefined | null) => {
+    if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+    const parsed = parseFloat(String(value || "0"));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const resolveAdjustment = (
+    type: "%" | "$",
+    value: string,
+    baseAmount: number,
+  ) => {
+    const parsed = toNumber(value);
+    if (parsed <= 0) return 0;
+    return type === "%" ? (baseAmount * parsed) / 100 : parsed;
+  };
+
   const calculateSubtotal = () => {
     const items = watchLineItems || [];
     return items.reduce(
@@ -165,11 +188,117 @@ export default function InvoiceForm() {
     }, 0);
   };
 
-  const calculateTotal = () => calculateSubtotal() + calculateTax();
+  const calculateMarkupTotal = () => {
+    return resolveAdjustment(markupType, markupValue, calculateSubtotal());
+  };
 
-  const onSubmit = (data: InvoiceFormValues) => {
-    console.log("submit", data);
-    handlePreview();
+  const calculateDiscount = () => {
+    return resolveAdjustment(discountType, discountValue, calculateSubtotal());
+  };
+
+  const calculateTotal = () => {
+    return (
+      calculateSubtotal() +
+      calculateMarkupTotal() +
+      calculateTax() -
+      calculateDiscount()
+    );
+  };
+
+  const buildCreateInvoicePayload = (
+    data: InvoiceFormValues,
+  ): CreateInvoicePayload => {
+    const subtotal = (data.lineItems || []).reduce(
+      (sum, item) => sum + toNumber(item.rate) * toNumber(item.quantity || 1),
+      0,
+    );
+
+    const markupTotal = resolveAdjustment(
+      data.markupType,
+      data.markupValue,
+      subtotal,
+    );
+    const discount = resolveAdjustment(
+      data.discountType,
+      data.discountValue,
+      subtotal,
+    );
+
+    const parsedLineItems = (data.lineItems || []).map((lineItem) => {
+      const rate = toNumber(lineItem.rate);
+      const quantity = toNumber(lineItem.quantity || 1);
+      const lineBase = rate * quantity;
+
+      const lineMarkup =
+        data.markupType === "%"
+          ? (lineBase * toNumber(data.markupValue)) / 100
+          : subtotal > 0
+            ? (lineBase / subtotal) * markupTotal
+            : 0;
+
+      const selectedTax = taxes.find(
+        (taxItem) => taxItem.name === lineItem.selectedTax,
+      );
+      const taxRate = toNumber(selectedTax?.rate);
+      const lineTax = (lineBase * taxRate) / 100;
+
+      return {
+        images: lineItem.images || [],
+        items:
+          (lineItem.items || []).length > 0
+            ? lineItem.items
+            : lineItem.description
+              ? [lineItem.description]
+              : [],
+        rate,
+        markup: lineMarkup,
+        quantity,
+        tax: lineTax,
+        total: lineBase + lineMarkup + lineTax,
+      };
+    });
+
+    const taxTotal = parsedLineItems.reduce((sum, item) => sum + item.tax, 0);
+    const totalAmount = subtotal + markupTotal + taxTotal - discount;
+    const depositAmount = resolveAdjustment(
+      data.depositType,
+      data.depositValue,
+      totalAmount,
+    );
+
+    return {
+      // Current UI doesn't capture dedicated leadId/quotationId yet.
+      leadId: (data.projectId || "").trim(),
+      quotationId: (data.poNumber || "").trim(),
+      date: data.date
+        ? new Date(`${data.date}T00:00:00.000Z`).toISOString()
+        : new Date().toISOString(),
+      daysToPay: toNumber(data.daysToPay),
+      lineItems: parsedLineItems,
+      subtotal,
+      markupTotal,
+      discount,
+      depositAmount,
+      totalAmount,
+    };
+  };
+
+  const onSubmit = async (data: InvoiceFormValues) => {
+    setErrorMessage(null);
+
+    try {
+      const payload = buildCreateInvoicePayload(data);
+      const response = await createInvoiceMutation.mutateAsync(payload);
+
+      if (!response.success) {
+        setErrorMessage(response.message || "Unable to create invoice.");
+        return;
+      }
+
+      handlePreview();
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error, "Unable to create invoice."));
+    }
   };
 
   const handlePreview = () => {
@@ -214,12 +343,17 @@ export default function InvoiceForm() {
           </Button>
           <Button
             onClick={handleSubmit(onSubmit)}
+            disabled={createInvoiceMutation.isPending}
             className="bg-[#2563EB] hover:bg-blue-700 text-white px-6"
           >
-            Save
+            {createInvoiceMutation.isPending ? "Saving..." : "Save"}
           </Button>
         </div>
       </header>
+
+      {errorMessage ? (
+        <p className="text-sm text-red-500">{errorMessage}</p>
+      ) : null}
 
       <div className="bg-white rounded-md p-4 sm:p-8 lg:p-10 shadow-sm mx-auto max-w-7xl">
         {/* Top Section: Client Info & Invoice Details */}
