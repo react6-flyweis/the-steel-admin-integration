@@ -1,10 +1,13 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { Search, Calendar, Clock, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { getApiErrorMessage } from "@/lib/api-error";
+import { useMeetingsQuery } from "@/modules/meetings/meetings.hooks";
+import type { AdminMeeting } from "@/modules/meetings/meetings.api";
 import {
   Select,
   SelectContent,
@@ -22,78 +25,94 @@ interface Meeting {
   type: "Online" | "In-person";
   status: "Scheduled" | "Cancelled" | "Completed";
 }
-// Generate randomized mock meetings for development/demo
-function generateMockMeetings(count: number): Meeting[] {
-  const titles = [
-    "Project Review",
-    "Kickoff",
-    "Client Demo",
-    "Sprint Planning",
-    "Retrospective",
-    "Design Sync",
-    "Budget Review",
-    "QA Review",
-  ];
-  const organizers = [
-    "John Smith",
-    "Jane Doe",
-    "Aisha Khan",
-    "Carlos Ruiz",
-    "Priya Patel",
-    "Liam Brown",
-  ];
-  const types: Meeting["type"][] = ["Online", "In-person"];
-  const statuses: Meeting["status"][] = ["Scheduled", "Completed"];
 
-  const rand = (arr: any[]) => arr[Math.floor(Math.random() * arr.length)];
-  const pad = (n: number) => n.toString().padStart(2, "0");
-
-  const today = new Date();
-  const makeDate = (offsetDays: number) => {
-    const d = new Date(today);
-    d.setDate(d.getDate() + offsetDays);
-    return d.toISOString().split("T")[0];
-  };
-
-  const items: Meeting[] = [];
-  for (let i = 0; i < count; i++) {
-    const offset = Math.floor(Math.random() * 60) - 15; // dates -15..+44 days
-    const hour = 8 + Math.floor(Math.random() * 9); // 8..16
-    const minute = Math.random() < 0.5 ? "00" : "30";
-    items.push({
-      id: `${Date.now().toString(36)}-${i}-${Math.floor(Math.random() * 1000)}`,
-      title: rand(titles),
-      organizer: rand(organizers),
-      date: makeDate(offset),
-      time: `${pad(hour)}:${minute}`,
-      type: rand(types),
-      status: rand(statuses),
-    });
+function getMeetingUserDisplayName(
+  user: AdminMeeting["assignedTo"] | AdminMeeting["createdBy"],
+): string {
+  if (!user) {
+    return "";
   }
 
-  // sort by date then time
-  items.sort((a, b) => {
-    if (a.date === b.date) return a.time.localeCompare(b.time);
-    return a.date.localeCompare(b.date);
-  });
+  if (typeof user === "string") {
+    return user;
+  }
 
-  return items;
+  return user.name || user.firstName || user.email || "";
 }
 
-const mockMeetings: Meeting[] = generateMockMeetings(9);
+function mapApiMeetingToUI(apiMeeting: AdminMeeting): Meeting {
+  const dateObject = new Date(apiMeeting.meetingTime);
+  const hasValidDate = !Number.isNaN(dateObject.getTime());
+
+  const status = apiMeeting.status?.toLowerCase();
+  let formattedStatus: Meeting["status"] = "Scheduled";
+  if (status === "completed") {
+    formattedStatus = "Completed";
+  } else if (status === "cancelled") {
+    formattedStatus = "Cancelled";
+  }
+
+  return {
+    id: apiMeeting._id,
+    title: apiMeeting.title || "Untitled meeting",
+    organizer:
+      getMeetingUserDisplayName(apiMeeting.assignedTo) ||
+      getMeetingUserDisplayName(apiMeeting.createdBy) ||
+      "Unassigned",
+    date: hasValidDate
+      ? dateObject.toLocaleDateString("en-CA")
+      : apiMeeting.meetingTime,
+    time: hasValidDate
+      ? dateObject.toLocaleTimeString("en-US", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        })
+      : "",
+    type: apiMeeting.mode === "online" ? "Online" : "In-person",
+    status: formattedStatus,
+  };
+}
 
 export default function Meetings() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const {
+    data: meetingsResponse,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useMeetingsQuery();
 
-  const filteredMeetings = mockMeetings.filter((meeting) => {
+  const meetings = useMemo(() => {
+    const responseData = meetingsResponse?.data;
+    if (!responseData) {
+      return [];
+    }
+
+    const apiMeetings = Array.isArray(responseData.meetings)
+      ? responseData.meetings
+      : responseData.meeting
+        ? [responseData.meeting]
+        : [];
+
+    return apiMeetings.map(mapApiMeetingToUI).sort((a, b) => {
+      const aDateTime = `${a.date} ${a.time}`;
+      const bDateTime = `${b.date} ${b.time}`;
+      return aDateTime.localeCompare(bDateTime);
+    });
+  }, [meetingsResponse]);
+
+  const filteredMeetings = meetings.filter((meeting) => {
     const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
       q === "" ||
       meeting.title.toLowerCase().includes(q) ||
       meeting.organizer.toLowerCase().includes(q) ||
       meeting.date.toLowerCase().includes(q) ||
+      meeting.time.toLowerCase().includes(q) ||
       meeting.type.toLowerCase().includes(q);
     const matchesStatus =
       statusFilter === "all" ||
@@ -107,6 +126,8 @@ export default function Meetings() {
         return "bg-green-100 text-green-700 hover:bg-green-100";
       case "Scheduled":
         return "bg-yellow-100 text-yellow-700 hover:bg-yellow-100";
+      case "Cancelled":
+        return "bg-red-100 text-red-700 hover:bg-red-100";
       default:
         return "bg-gray-100 text-gray-700 hover:bg-gray-100";
     }
@@ -140,6 +161,7 @@ export default function Meetings() {
               <SelectItem value="all">All Status</SelectItem>
               <SelectItem value="scheduled">Scheduled</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -152,71 +174,96 @@ export default function Meetings() {
         </Button>
       </div>
 
+      {isError ? (
+        <div className="rounded-lg border border-red-100 bg-red-50 px-4 py-3">
+          <p className="text-sm text-red-700">
+            {getApiErrorMessage(error, "Unable to load meetings.")}
+          </p>
+          <Button className="mt-3" variant="outline" onClick={() => refetch()}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+
       {/* Meetings Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filteredMeetings.map((meeting) => (
-          <Card
-            key={meeting.id}
-            className="p-4 gap-2  bg-[#F9FAFB] shadow border-0 ring-0"
-          >
-            {/* Header with title and status */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900">{meeting.title}</h3>
-                <p className="text-sm text-gray-600 mt-1">
-                  {meeting.organizer}
-                </p>
-              </div>
-              <Badge className={getStatusColor(meeting.status)}>
-                {meeting.status}
-              </Badge>
-            </div>
-
-            {/* Meeting Details */}
-            <div className="flex items-center gap-2 space-y-1">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Calendar className="h-4 w-4" />
-                <span>{meeting.date}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Clock className="h-4 w-4" />
-                <span>{meeting.time}</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Video className="h-4 w-4" />
-                <span>{meeting.type}</span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-2 mt-2">
-              {meeting.status !== "Completed" && (
-                <Button
-                  size="sm"
-                  className="w-full sm:flex-1 bg-blue-200 text-blue-600 hover:bg-blue-100 hover:text-blue-700"
-                  onClick={() =>
-                    navigate(`/customers/meetings/reschedule/${meeting.id}`)
-                  }
-                >
-                  Edit
-                </Button>
-              )}
-              <Button
-                size="sm"
-                className="w-full sm:flex-1 bg-orange-200 text-orange-600 hover:bg-orange-100 hover:text-orange-700"
-                onClick={() =>
-                  navigate(`/customers/meetings/reschedule/${meeting.id}`)
-                }
+        {isLoading
+          ? Array.from({ length: 6 }).map((_, index) => (
+              <Card
+                key={`meeting-skeleton-${index}`}
+                className="p-4 gap-2 bg-[#F9FAFB] shadow border-0 ring-0"
               >
-                Reschedule meeting
-              </Button>
-            </div>
-          </Card>
-        ))}
+                <div className="h-4 w-2/3 rounded bg-gray-200 animate-pulse" />
+                <div className="h-3 w-1/2 rounded bg-gray-200 animate-pulse" />
+                <div className="h-3 w-full rounded bg-gray-200 animate-pulse" />
+                <div className="h-8 w-full rounded bg-gray-200 animate-pulse mt-2" />
+              </Card>
+            ))
+          : filteredMeetings.map((meeting) => (
+              <Card
+                key={meeting.id}
+                className="p-4 gap-2  bg-[#F9FAFB] shadow border-0 ring-0"
+              >
+                {/* Header with title and status */}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      {meeting.title}
+                    </h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      {meeting.organizer}
+                    </p>
+                  </div>
+                  <Badge className={getStatusColor(meeting.status)}>
+                    {meeting.status}
+                  </Badge>
+                </div>
+
+                {/* Meeting Details */}
+                <div className="flex items-center gap-2 space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Calendar className="h-4 w-4" />
+                    <span>{meeting.date}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Clock className="h-4 w-4" />
+                    <span>{meeting.time}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Video className="h-4 w-4" />
+                    <span>{meeting.type}</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-2 mt-2">
+                  {meeting.status !== "Completed" && (
+                    <Button
+                      size="sm"
+                      className="w-full sm:flex-1 bg-blue-200 text-blue-600 hover:bg-blue-100 hover:text-blue-700"
+                      onClick={() =>
+                        navigate(`/customers/meetings/reschedule/${meeting.id}`)
+                      }
+                    >
+                      Edit
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    className="w-full sm:flex-1 bg-orange-200 text-orange-600 hover:bg-orange-100 hover:text-orange-700"
+                    onClick={() =>
+                      navigate(`/customers/meetings/reschedule/${meeting.id}`)
+                    }
+                  >
+                    Reschedule meeting
+                  </Button>
+                </div>
+              </Card>
+            ))}
       </div>
 
       {/* Empty State */}
-      {filteredMeetings.length === 0 && (
+      {!isLoading && !isError && filteredMeetings.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500">No meetings found</p>
         </div>
