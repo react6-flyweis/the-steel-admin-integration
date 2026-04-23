@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Send, Menu, Sparkles, Mail, Phone, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import FollowUpDialog from "@/components/follow-up/follow-up-dialog";
+import { useFollowUpAiScriptsQuery } from "@/modules/followups/followups.hooks";
+import { getApiErrorMessage } from "@/lib/api-error";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -18,30 +20,145 @@ interface Message {
   timestamp: Date;
 }
 
+type ScriptItem = {
+  id: string;
+  name: string;
+  type: "mail" | "phone";
+  text: string;
+  time: string;
+  tag: {
+    label: string;
+    color: string;
+  };
+  createdAt?: string;
+};
+
+const toneClassByLabel: Record<string, string> = {
+  professional: "bg-blue-100 text-blue-700",
+  friendly: "bg-green-100 text-green-700",
+  urgent: "bg-red-100 text-red-700",
+};
+
+function getScriptText(item: {
+  script?: string;
+  message?: string;
+  content?: string;
+  generatedScript?: string;
+}) {
+  return (
+    item.script?.trim() ||
+    item.generatedScript?.trim() ||
+    item.content?.trim() ||
+    item.message?.trim() ||
+    ""
+  );
+}
+
+function getRelativeTime(value?: string) {
+  if (!value) {
+    return "Recently";
+  }
+
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return "Recently";
+  }
+
+  const deltaInMinutes = Math.round((timestamp - Date.now()) / (1000 * 60));
+  const formatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+
+  if (Math.abs(deltaInMinutes) < 60) {
+    return formatter.format(deltaInMinutes, "minute");
+  }
+
+  const deltaInHours = Math.round(deltaInMinutes / 60);
+  if (Math.abs(deltaInHours) < 24) {
+    return formatter.format(deltaInHours, "hour");
+  }
+
+  const deltaInDays = Math.round(deltaInHours / 24);
+  return formatter.format(deltaInDays, "day");
+}
+
 export default function AiScriptGeneratorPage() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: "1",
-      text: "Hello John! I'd be happy to help you with that. Can you tell me more about the intended use and any specific requirements?",
-      sender: "ai",
-      timestamp: new Date(),
-    },
-    {
-      id: "2",
-      text: "It will be used for automotive repair. I need overhead doors and good ventilation.",
-      sender: "user",
-      timestamp: new Date(),
-    },
-    {
-      id: "3",
-      text: "I just wanted to follow up regarding the quotation we shared for your warehouse project last week.\n\nHave you had a chance to go through the details?\n\nWe've customized the structure based on your initial design inputs — and I'd be happy to walk you through the material specifications or pricing options if you have any questions.\n\nAlso, our design team has a slot available this week if you'd like to discuss potential modifications before finalizing.\n\nWould you prefer a quick call tomorrow morning or later in the afternoon?",
-      sender: "ai",
-      timestamp: new Date(),
-    },
-  ]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [selectedScriptId, setSelectedScriptId] = useState<string | null>(null);
   const [inputMessage, setInputMessage] = useState("");
 
+  const {
+    data: aiScriptsResponse,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useFollowUpAiScriptsQuery();
+
+  const scripts = useMemo<ScriptItem[]>(() => {
+    const items = aiScriptsResponse?.data.scripts ?? [];
+
+    return items.reduce<ScriptItem[]>((acc, item, index) => {
+      const text = getScriptText(item);
+      if (!text) {
+        return acc;
+      }
+
+      const tagLabel = (item.tone || item.followupType || "professional")
+        .trim()
+        .toLowerCase();
+
+      acc.push({
+        id: item._id || item.id || `script-${index}`,
+        name:
+          item.customerName?.trim() ||
+          item.customerId?.firstName?.trim() ||
+          "Customer",
+        type:
+          item.channel?.toLowerCase() === "call" ||
+          item.channel?.toLowerCase() === "phone"
+            ? "phone"
+            : "mail",
+        text,
+        time: getRelativeTime(item.createdAt),
+        tag: {
+          label: tagLabel,
+          color: toneClassByLabel[tagLabel] ?? "bg-slate-100 text-slate-700",
+        },
+        createdAt: item.createdAt,
+      });
+
+      return acc;
+    }, []);
+  }, [aiScriptsResponse]);
+
+  const effectiveSelectedScriptId =
+    selectedScriptId && scripts.some((script) => script.id === selectedScriptId)
+      ? selectedScriptId
+      : (scripts[0]?.id ?? null);
+
+  const selectedScript = useMemo(
+    () => scripts.find((item) => item.id === effectiveSelectedScriptId) ?? null,
+    [scripts, effectiveSelectedScriptId],
+  );
+
+  const messagesToRender = selectedScript
+    ? [
+        {
+          id: `${selectedScript.id}-ai`,
+          text: selectedScript.text,
+          sender: "ai" as const,
+          timestamp: selectedScript.createdAt
+            ? new Date(selectedScript.createdAt)
+            : new Date(),
+        },
+        ...messages,
+      ]
+    : [];
+
   const handleSendMessage = () => {
+    if (!selectedScript || !inputMessage.trim()) {
+      return;
+    }
+
     if (inputMessage.trim()) {
       const newMessage: Message = {
         id: Date.now().toString(),
@@ -49,7 +166,7 @@ export default function AiScriptGeneratorPage() {
         sender: "user",
         timestamp: new Date(),
       };
-      setMessages([...messages, newMessage]);
+      setMessages((prev) => [...prev, newMessage]);
       setInputMessage("");
 
       // Simulate AI response
@@ -93,44 +210,18 @@ export default function AiScriptGeneratorPage() {
 
                 <DropdownMenuContent className="w-120 p-2 bg-white rounded-lg shadow-md">
                   <div className="space-y-2">
-                    {[
-                      {
-                        id: "m1",
-                        name: "Sarah Johnson",
-                        type: "mail",
-                        text: "Hi Sarah, Following up on our discussion about the implementation timeline...",
-                        time: "1 hour ago",
-                        tag: {
-                          label: "professional",
-                          color: "bg-blue-100 text-blue-700",
-                        },
-                      },
-                      {
-                        id: "m2",
-                        name: "Michael Chen",
-                        type: "phone",
-                        text: "Hi Michael, I hope you had a chance to review the demo video...",
-                        time: "3 hours ago",
-                        tag: {
-                          label: "friendly",
-                          color: "bg-green-100 text-green-700",
-                        },
-                      },
-                      {
-                        id: "m3",
-                        name: "Emily Davis",
-                        type: "mail",
-                        text: "Hi Emily, I wanted to reach out regarding the competitive analysis...",
-                        time: "5 hours ago",
-                        tag: {
-                          label: "urgent",
-                          color: "bg-red-100 text-red-700",
-                        },
-                      },
-                    ].map((item) => (
+                    {scripts.map((item) => (
                       <div
                         key={item.id}
-                        className="border rounded-lg p-3 bg-white"
+                        className={cn(
+                          "border rounded-lg p-3 bg-white cursor-pointer",
+                          effectiveSelectedScriptId === item.id &&
+                            "border-blue-300 ring-1 ring-blue-200",
+                        )}
+                        onClick={() => {
+                          setSelectedScriptId(item.id);
+                          setMessages([]);
+                        }}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex  gap-3">
@@ -164,7 +255,14 @@ export default function AiScriptGeneratorPage() {
                             {item.time}
                           </span>
                           <div className="flex items-center gap-2">
-                            <button className="p-1 rounded hover:bg-gray-100">
+                            <button
+                              className="p-1 rounded hover:bg-gray-100"
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void navigator.clipboard.writeText(item.text);
+                              }}
+                            >
                               <Copy className="w-4 h-4 text-gray-500" />
                             </button>
                             <button className="p-1 rounded hover:bg-gray-100">
@@ -174,6 +272,12 @@ export default function AiScriptGeneratorPage() {
                         </div>
                       </div>
                     ))}
+                    {scripts.length === 0 && !isLoading && !isError ? (
+                      <div className="border rounded-lg p-3 bg-white text-sm text-gray-500">
+                        {aiScriptsResponse?.data.message ||
+                          "No follow-ups scheduled for today"}
+                      </div>
+                    ) : null}
                   </div>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -191,29 +295,49 @@ export default function AiScriptGeneratorPage() {
           </div>
 
           {/* Messages Container */}
-          <div className="p-6 space-y-4 min-h-[500px] max-h-[500px] overflow-y-auto">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "flex",
-                  message.sender === "user" ? "justify-start" : "justify-end"
-                )}
-              >
+          <div className="p-6 space-y-4 min-h-125 max-h-125 overflow-y-auto">
+            {isLoading ? (
+              <div className="h-full min-h-105 flex items-center justify-center text-sm text-gray-500">
+                Loading AI scripts...
+              </div>
+            ) : isError ? (
+              <div className="h-full min-h-105 flex flex-col items-center justify-center gap-3 text-center">
+                <p className="text-sm text-red-600">
+                  {getApiErrorMessage(error, "Failed to load AI scripts.")}
+                </p>
+                <Button variant="outline" onClick={() => refetch()}>
+                  Try again
+                </Button>
+              </div>
+            ) : messagesToRender.length === 0 ? (
+              <div className="h-full min-h-105 flex items-center justify-center text-sm text-gray-500 text-center">
+                {aiScriptsResponse?.data.message ||
+                  "No follow-ups scheduled for today"}
+              </div>
+            ) : (
+              messagesToRender.map((message) => (
                 <div
+                  key={message.id}
                   className={cn(
-                    "max-w-[80%] rounded-lg px-4 py-3",
-                    message.sender === "user"
-                      ? "bg-gray-200 text-gray-900"
-                      : "bg-blue-600 text-white"
+                    "flex",
+                    message.sender === "user" ? "justify-start" : "justify-end",
                   )}
                 >
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                    {message.text}
-                  </p>
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-lg px-4 py-3",
+                      message.sender === "user"
+                        ? "bg-gray-200 text-gray-900"
+                        : "bg-blue-600 text-white",
+                    )}
+                  >
+                    <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                      {message.text}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
 
           {/* Input Area */}
@@ -226,10 +350,12 @@ export default function AiScriptGeneratorPage() {
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
                 className="flex-1 bg-white"
+                disabled={!selectedScript || isLoading || isError}
               />
               <Button
                 onClick={handleSendMessage}
                 className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                disabled={!selectedScript || isLoading || isError}
               >
                 <Send className="h-4 w-4" />
                 Send
