@@ -36,6 +36,34 @@ export type UpcomingFollowUpsResponse = {
   };
 };
 
+export type FollowUpAiScriptApiItem = {
+  _id?: string;
+  id?: string;
+  script?: string;
+  message?: string;
+  content?: string;
+  generatedScript?: string;
+  followupType?: string;
+  type?: string;
+  channel?: string;
+  tone?: string;
+  customerName?: string;
+  customerId?: {
+    firstName?: string;
+  } | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type FollowUpAiScriptsResponse = {
+  success: boolean;
+  message: string;
+  data: {
+    scripts: FollowUpAiScriptApiItem[];
+    message?: string;
+  };
+};
+
 export async function getFollowUpStatsProvider() {
   const response = await apiClient.get<FollowUpStatsResponse>(
     "/api/admin/followups/stats",
@@ -47,6 +75,14 @@ export async function getFollowUpStatsProvider() {
 export async function getUpcomingFollowUpsProvider() {
   const response = await apiClient.get<UpcomingFollowUpsResponse>(
     "/api/admin/followups/upcoming",
+  );
+
+  return response.data;
+}
+
+export async function getFollowUpAiScriptsProvider() {
+  const response = await apiClient.get<FollowUpAiScriptsResponse>(
+    "/api/admin/followups/ai-script",
   );
 
   return response.data;
