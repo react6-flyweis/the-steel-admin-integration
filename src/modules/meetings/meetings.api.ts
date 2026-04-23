@@ -1,5 +1,23 @@
 import { apiClient } from "@/modules/auth/auth.api";
 
+export type CreateMeetingPayload = {
+  customerId: string;
+  leadId: string;
+  title: string;
+  meetingTime: string;
+  duration: number;
+  mode: "online" | "in-person";
+  meetingLink: string;
+  notes?: string;
+  assignedTo: string;
+};
+
+export type CreateMeetingResponse = {
+  success: boolean;
+  message: string;
+  data: unknown;
+};
+
 export type MeetingUserRef =
   | string
   | {
@@ -44,6 +62,15 @@ export type GetAdminMeetingsResponse = {
   message: string;
   data: GetAdminMeetingsData;
 };
+
+export async function createMeetingProvider(payload: CreateMeetingPayload) {
+  const response = await apiClient.post<CreateMeetingResponse>(
+    "/api/admin/meetings",
+    payload,
+  );
+
+  return response.data;
+}
 
 export async function getAdminMeetingsProvider() {
   const response = await apiClient.get<GetAdminMeetingsResponse>(
